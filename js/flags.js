@@ -279,7 +279,10 @@
 				msgEl.setAttribute("data-constituency-flag", "false");
 			}
 			msgEl.setAttribute("data-is-uk-flag", isUK ? "true" : "false");
-			if (!showConstituencyLabels && msgEl.getAttribute("data-constituency-flag") === "true") {
+			if (
+				!showConstituencyLabels &&
+				msgEl.getAttribute("data-constituency-flag") === "true"
+			) {
 				msgEl.style.display = "none";
 			}
 			wrapper.appendChild(flagEl);
