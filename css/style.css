@@ -1314,11 +1314,11 @@ h4 {
 	display: grid;
 	grid-template-columns: 1fr 1fr;
 	gap: 0.75rem;
-	padding: 0.65rem 0 0.4rem;
+	padding: 0.55rem 0 0.25rem;
 	border-top: none;
 }
 .settings-row.toggle-pair .toggle-cell {
-	display: contents; /* allow button to fill cell */
+	display: block; /* normal block so hiding wrapper collapses space */
 }
 .settings-row.toggle-pair .settings-block {
 	grid-column: auto;
@@ -1330,10 +1330,27 @@ h4 {
 	opacity: 1;
 }
 #constituency-toggle-wrapper.is-hidden-dep {
-	opacity: 0;
+	display: none !important;
+}
+/* Single column variant when dependency hidden */
+.settings-row.toggle-pair.single-toggle-row {
+	grid-template-columns: 1fr;
+	gap: 0;
+	padding-bottom: 0.15rem;
+}
+/* Generic hidden dependency state */
+.is-hidden-dep {
+	opacity: 0 !important;
+	visibility: hidden !important;
+	pointer-events: none !important;
+}
+#animation-mode-row {
+	transition: opacity 140ms ease, visibility 140ms ease, max-height 140ms ease,
+		margin 140ms ease;
+}
+#animation-mode-row.is-hidden-dep {
 	max-height: 0;
-	visibility: hidden;
-	pointer-events: none;
+	margin: 0;
 }
 @media (max-width: 640px) {
 	.settings-row.toggle-pair {

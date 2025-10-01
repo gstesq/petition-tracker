@@ -25,6 +25,11 @@
 		const enabled = flagCheckbox ? flagCheckbox.checked : animationEnabled;
 		const depWrap = document.getElementById("constituency-toggle-wrapper");
 		if (depWrap) depWrap.classList.toggle("is-hidden-dep", !enabled);
+		const pairRow = depWrap ? depWrap.closest(".toggle-pair") : null;
+		if (pairRow) {
+			if (!enabled) pairRow.classList.add("single-toggle-row");
+			else pairRow.classList.remove("single-toggle-row");
+		}
 		const animRow = document.getElementById("animation-mode-row");
 		if (animRow) animRow.classList.toggle("is-hidden-dep", !enabled);
 	}
