@@ -19,7 +19,9 @@ class PetitionTracker {
 		this.currentDisplayedTotal = 0; // Track the currently displayed total for smooth animation
 		this.counterAnimationId = null; // Track the current animation timeout
 		this.signatureHistoryData = []; // Store historical signature data for visualization
-		this.maxHistoryEntries = 50; // Keep last 50 entries (about 8 minutes of history)
+		// We want up to 1 hour at 10s resolution => 360 points; keep slight buffer
+		this.maxHistoryEntries = 400; // internal raw samples (actual fetches + interpolation) before slotting
+		this.historyStartTime = null; // timestamp of first recorded signature for slot alignment
 		this.numberOfCountries = 0;
 		this.lastUpdate = null;
 		this.title = "";
@@ -83,6 +85,7 @@ class PetitionTracker {
 		this.previousConstituencyData = [];
 		this.previousCountryData = [];
 		this.chartYMax = 20; // Reset Y-axis max to a lower default
+		this.historyStartTime = null; // reset aligned history origin
 
 		// 3. Clear local storage
 		try {
@@ -182,6 +185,9 @@ class PetitionTracker {
 		const last =
 			this.signatureHistoryData[this.signatureHistoryData.length - 1];
 		const intervalMs = this.updateInterval || 10000;
+		if (!this.historyStartTime) {
+			this.historyStartTime = timestamp; // establish origin at first real data point
+		}
 		if (last) {
 			const gap = timestamp - last.timestamp;
 			// If gap is meaningfully larger than one interval, interpolate
@@ -212,6 +218,46 @@ class PetitionTracker {
 		this.updateHistoryChart();
 	}
 
+	// Build aligned 10s slot series up to 1 hour (360 slots max)
+	buildAlignedSlots() {
+		const INTERVAL = 10000; // 10s
+		const MAX_DURATION = 3600000; // 1h in ms
+		if (!this.historyStartTime && this.signatureHistoryData.length) {
+			this.historyStartTime = this.signatureHistoryData[0].timestamp;
+		}
+		if (!this.historyStartTime) return [];
+		// Use last known data timestamp to avoid creating a future empty slot that shows 0 jump
+		const lastDataTimestamp = this.signatureHistoryData.length
+			? this.signatureHistoryData[this.signatureHistoryData.length - 1]
+					.timestamp
+			: this.historyStartTime;
+		let span = lastDataTimestamp - this.historyStartTime;
+		if (span > MAX_DURATION) {
+			// slide window forward keeping last hour
+			this.historyStartTime = lastDataTimestamp - MAX_DURATION;
+			span = MAX_DURATION;
+		}
+		const totalSlots = Math.floor(span / INTERVAL) + 1; // inclusive of first slot
+		// Pointer over raw data (assumed sorted)
+		const data = this.signatureHistoryData;
+		let dataIdx = 0;
+		let lastValue = data.length ? data[0].signatures : 0;
+		const slots = [];
+		for (let i = 0; i < totalSlots && i < 360; i++) {
+			const slotTs = this.historyStartTime + i * INTERVAL;
+			// advance dataIdx while data point timestamp <= slotTs
+			while (
+				dataIdx < data.length &&
+				data[dataIdx].timestamp <= slotTs + 2 // slight tolerance
+			) {
+				lastValue = data[dataIdx].signatures;
+				dataIdx++;
+			}
+			slots.push({ index: i, timestamp: slotTs, signatures: lastValue });
+		}
+		return slots;
+	}
+
 	updateHistoryChart() {
 		const chartModeSelect = document.getElementById("chart-mode");
 		const mode = chartModeSelect ? chartModeSelect.value : "jumps";
@@ -230,12 +276,11 @@ class PetitionTracker {
 		const chartContainer = document.querySelector(".history-chart");
 		if (!chartContainer) return;
 
-		if (this.signatureHistoryData.length < 2) {
+		const displayData = this.buildAlignedSlots();
+		if (displayData.length < 1) {
 			chartContainer.innerHTML = "";
 			return;
 		}
-
-		const displayData = this.signatureHistoryData.slice(-360);
 		// Responsive width: use actual container width (capped for readability)
 		let width = Math.floor(chartContainer.getBoundingClientRect().width);
 		if (!width || width < 200) width = 200; // sensible minimum
@@ -277,6 +322,17 @@ class PetitionTracker {
 		// Path for signature growth
 		let path = "M";
 		displayData.forEach((point, index) => {
+			if (displayData.length === 1) {
+				// single point: both x extremes same
+				const xSingle = padding;
+				const ySingle =
+					height -
+					padding -
+					((point.signatures - yAxisMin) / (yAxisMax - yAxisMin)) *
+						(height - padding * 2);
+				path += `${xSingle},${ySingle}`;
+				return;
+			}
 			const x =
 				padding + (index / (displayData.length - 1)) * (width - padding * 2);
 			const y =
@@ -289,14 +345,23 @@ class PetitionTracker {
 		svg += `<path d="${path}" stroke="#007bff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
 
 		// X-axis labels
+		// X-axis labels: elapsed span and now
 		const firstTimestamp = displayData[0].timestamp;
-		const diffMs = Date.now() - firstTimestamp;
-		const diffMinutes = Math.floor(diffMs / 60000);
-		let agoText = diffMinutes > 1 ? `${diffMinutes} mins ago` : "1 min ago";
-
+		const lastTimestamp = displayData[displayData.length - 1].timestamp;
+		const spanSecs = Math.max(
+			0,
+			Math.round((lastTimestamp - firstTimestamp) / 1000)
+		);
+		let spanLabel;
+		if (spanSecs < 60) spanLabel = `${spanSecs}s span`;
+		else {
+			const m = Math.floor(spanSecs / 60);
+			const s = spanSecs % 60;
+			spanLabel = s ? `${m}m ${s}s span` : `${m}m span`;
+		}
 		svg += `<text x="${padding}" y="${
 			height - 5
-		}" font-size="9" fill="#666">${agoText}</text>`;
+		}" font-size="9" fill="#666">${spanLabel}</text>`;
 		const rightLabelX = Math.max(padding + 40, width - padding - 30);
 		svg += `<text x="${rightLabelX}" y="${
 			height - 5
@@ -314,25 +379,18 @@ class PetitionTracker {
 		}
 
 		// If no data, clear the chart
-		if (this.signatureHistoryData.length < 2) {
+		const slots = this.buildAlignedSlots();
+		if (slots.length < 2) {
 			chartContainer.innerHTML = "";
 			return;
 		}
-
 		const jumps = [];
-		for (let i = 1; i < this.signatureHistoryData.length; i++) {
-			const jump =
-				this.signatureHistoryData[i].signatures -
-				this.signatureHistoryData[i - 1].signatures;
-			jumps.push({
-				jump: Math.max(0, jump),
-				timestamp: this.signatureHistoryData[i].timestamp,
-			});
-		}
-
-		if (jumps.length === 0) {
-			chartContainer.innerHTML = "";
-			return;
+		for (let i = 1; i < slots.length; i++) {
+			const jumpVal = Math.max(
+				0,
+				slots[i].signatures - slots[i - 1].signatures
+			);
+			jumps.push({ jump: jumpVal, timestamp: slots[i].timestamp });
 		}
 
 		// --- Dynamic Y-axis Logic ---
@@ -371,7 +429,7 @@ class PetitionTracker {
 		const yAxisMax = this.chartYMax;
 		// --- End Dynamic Y-axis Logic ---
 
-		const displayData = jumps.slice(-360);
+		const displayData = jumps.slice(-360); // already at 10s spacing
 		let width = Math.floor(chartContainer.getBoundingClientRect().width);
 		if (!width || width < 200) width = 200;
 		if (width > 620) width = 620;
@@ -432,9 +490,7 @@ class PetitionTracker {
 		if (latestJump) {
 			const currentX = width - padding - 60;
 			const currentY = padding + 15;
-			const peakJump = displayData.length
-				? Math.max(...displayData.map((p) => p.jump))
-				: latestJump.jump;
+			const peakJump = Math.max(...displayData.map((p) => p.jump));
 			svg += `<text x="${currentX}" y="${currentY}" font-size="11" fill="#333" font-weight="bold">Latest: +${latestJump.jump}</text>`;
 			svg += `<text x="${currentX}" y="${
 				currentY + 12
@@ -443,18 +499,17 @@ class PetitionTracker {
 
 		// --- Dual X-axis Labels (left elapsed span ago, right now) ---
 		if (displayData.length > 0) {
-			let agoLabel = "0s ago";
+			let agoLabel = "0s span";
 			if (displayData.length > 1) {
 				const spanMs =
 					displayData[displayData.length - 1].timestamp -
 					displayData[0].timestamp;
 				const secs = Math.max(0, Math.round(spanMs / 1000));
-				if (secs < 60) {
-					agoLabel = `${secs}s ago`;
-				} else {
+				if (secs < 60) agoLabel = `${secs}s span`;
+				else {
 					const m = Math.floor(secs / 60);
 					const s = secs % 60;
-					agoLabel = s ? `${m}m ${s}s ago` : `${m}m ago`;
+					agoLabel = s ? `${m}m ${s}s span` : `${m}m span`;
 				}
 			}
 			// left label
