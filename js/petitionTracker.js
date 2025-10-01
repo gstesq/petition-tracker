@@ -26,6 +26,8 @@ class PetitionTracker {
 		this.lastUpdate = null;
 		this.title = "";
 		this.updateInterval = 10000; // 10 seconds
+		this.lastUpdateTimestamp = null; // numeric timestamp for slot/logging (may synthesize to record zero intervals)
+		this.lastTotalSignaturesSeen = null; // track previous total to detect no-change intervals
 		this.initialRampPlanned = false; // track if first ramp custom duration is applied
 		this.table = null;
 		this.chartYMax = 100; // Initial Y-axis max for the history chart
@@ -238,6 +240,9 @@ class PetitionTracker {
 			? this.signatureHistoryData[this.signatureHistoryData.length - 1]
 					.timestamp
 			: this.historyStartTime;
+		// Only build up to the timestamp of the latest real (or interpolated) data point;
+		// do NOT extend to "now" to avoid fabricating zero-activity intervals before the
+		// next fetch actually occurs.
 		let span = lastDataTimestamp - this.historyStartTime;
 		if (span > MAX_DURATION) {
 			this.historyStartTime = lastDataTimestamp - MAX_DURATION;
@@ -380,16 +385,14 @@ class PetitionTracker {
 			return;
 		}
 
-		// If no data, clear the chart
+		// Build slots strictly up to last known data. Trim any trailing partial interval that doesn't
+		// correspond to a real sample to avoid speculative zeros.
 		let slots = this.buildAlignedSlots();
-		// Remove trailing slot if it corresponds to the currently in-progress (not yet completed) 10s interval
 		if (slots.length > 1) {
 			const INTERVAL = 10000;
 			const nowTs = Date.now();
 			const lastSlot = slots[slots.length - 1];
-			// If we are still within the interval (less than INTERVAL since slot timestamp) and no newer real datapoint landed after slot creation
 			if (nowTs - lastSlot.timestamp < INTERVAL) {
-				// Keep it only if a real data sample matched that timestamp (i.e., actual signature point recorded exactly at slot boundary)
 				const hasExactPoint = this.signatureHistoryData.some(
 					(p) => p.timestamp === lastSlot.timestamp
 				);
@@ -408,6 +411,7 @@ class PetitionTracker {
 			const jumpVal = Math.max(0, Math.round(rawDelta));
 			jumps.push({ jump: jumpVal, timestamp: slots[i].timestamp });
 		}
+		// No fabrication needed: buildAlignedSlots now extends to current aligned time capturing zero-activity intervals.
 
 		// --- Dynamic Y-axis Logic ---
 		const maxJump = Math.max(...jumps.map((j) => j.jump), 0);
@@ -509,11 +513,13 @@ class PetitionTracker {
 		if (latestJump) {
 			const currentX = width - padding - 60;
 			const currentY = padding + 15;
-			const peakJump = Math.max(...displayData.map((p) => p.jump));
-			svg += `<text x="${currentX}" y="${currentY}" font-size="11" fill="#333" font-weight="bold">Latest: +${latestJump.jump}</text>`;
+			const peakJump = Math.max(...displayData.map((p) => p.jump), 0);
+			const latestLabel = `Latest: +${latestJump.jump}`;
+			const peakLabel = `Peak: +${peakJump}`;
+			svg += `<text x="${currentX}" y="${currentY}" font-size="11" fill="#333" font-weight="bold">${latestLabel}</text>`;
 			svg += `<text x="${currentX}" y="${
 				currentY + 12
-			}" font-size="10" fill="#555">Peak: +${peakJump}</text>`;
+			}" font-size="10" fill="#555">${peakLabel}</text>`;
 		}
 
 		// --- Dual X-axis Labels (left elapsed span ago, right now) ---
@@ -584,10 +590,31 @@ class PetitionTracker {
 
 		this.calculateRegionData();
 		this.updateSignatureHistory();
-		this.addSignatureHistoryEntry(
-			this.totalSignatures,
-			new Date(this.lastUpdate).getTime()
-		);
+		// Determine timestamp for history entry. If the petition API 'updated_at' has not advanced AND
+		// the signature count is unchanged compared to the last recorded point, we create a synthetic
+		// timestamp advanced by one polling interval so the charts register a zero-activity interval
+		// instead of showing nothing.
+		let entryTimestamp = new Date(this.lastUpdate).getTime();
+		const lastHistoryPoint =
+			this.signatureHistoryData[this.signatureHistoryData.length - 1];
+		if (lastHistoryPoint) {
+			const unchangedCount =
+				lastHistoryPoint.signatures === this.totalSignatures;
+			const unchangedTimestamp = lastHistoryPoint.timestamp === entryTimestamp;
+			if (unchangedCount && unchangedTimestamp) {
+				// Advance exactly one polling interval (aligned), but never in the future.
+				const proposed = lastHistoryPoint.timestamp + this.updateInterval;
+				const nowTs = Date.now();
+				entryTimestamp = proposed > nowTs ? nowTs : proposed;
+			}
+			// Ensure strictly increasing and keep alignment to 10s grid relative to historyStartTime when possible.
+			if (entryTimestamp <= lastHistoryPoint.timestamp) {
+				const base = lastHistoryPoint.timestamp + this.updateInterval;
+				const nowTs = Date.now();
+				entryTimestamp = base > nowTs ? nowTs : base;
+			}
+		}
+		this.addSignatureHistoryEntry(this.totalSignatures, entryTimestamp);
 		this.updateUI();
 		// After first successful data fetch, mark initial ramp planning if not yet set
 		if (!this.initialRampPlanned) {
