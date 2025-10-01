@@ -139,7 +139,9 @@ header h1.top-cat {
 	max-width: 100%;
 	gap: 0.2rem;
 }
-.signature-counter .h1.totalSigs { letter-spacing: 0.5px; }
+.signature-counter .h1.totalSigs {
+	letter-spacing: 0.5px;
+}
 
 .status-indicator h2 {
 	font-size: calc(1.25rem * var(--scale-base));
@@ -176,20 +178,23 @@ header h1.top-cat {
 }
 /* Alignment helpers to keep numeric columns visually aligned across rows */
 /* Base column sizing (subject to change on small screens) */
-.statistics-grid .info-box strong { flex: 0 0 132px; }
-.statistics-grid .info-box .ukOnly,
-.statistics-grid .info-box .englandOnly,
-.statistics-grid .info-box .scotlandOnly,
-.statistics-grid .info-box .walesOnly,
-.statistics-grid .info-box .irelandOnly,
-.statistics-grid .info-box .nonukOnly { flex: 0 0 140px; text-align: right; }
+.statistics-grid .info-box strong {
+	flex: 0 0 132px;
+}
+
 .statistics-grid .info-box .ukOnlyPc,
 .statistics-grid .info-box .englandOnlyPc,
 .statistics-grid .info-box .scotlandOnlyPc,
 .statistics-grid .info-box .walesOnlyPc,
 .statistics-grid .info-box .irelandOnlyPc,
-.statistics-grid .info-box .nonukOnlyPc { flex: 0 0 90px; text-align: right; }
-.statistics-grid .info-box .jump-indicator { flex: 0 0 56px; text-align: right; }
+.statistics-grid .info-box .nonukOnlyPc {
+	flex: 0 0 90px;
+	text-align: right;
+}
+.statistics-grid .info-box .jump-indicator {
+	flex: 0 0 56px;
+	text-align: right;
+}
 /* Create consistent internal columns using utility wrappers */
 .statistics-grid .info-box strong {
 	text-align: left;
@@ -267,20 +272,20 @@ header h1.top-cat {
 		font-size: 1.15rem; /* slight downscale for fit */
 	}
 	/* Allow label to shrink naturally without enforcing 160px min */
-	.statistics-grid .info-box strong { flex: 1 1 auto; min-width: 0; }
-	.statistics-grid .info-box .ukOnly,
-	.statistics-grid .info-box .englandOnly,
-	.statistics-grid .info-box .scotlandOnly,
-	.statistics-grid .info-box .walesOnly,
-	.statistics-grid .info-box .irelandOnly,
-	.statistics-grid .info-box .nonukOnly { flex: 1 1 120px; }
+	.statistics-grid .info-box strong {
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+
 	.statistics-grid .info-box .ukOnlyPc,
 	.statistics-grid .info-box .englandOnlyPc,
 	.statistics-grid .info-box .scotlandOnlyPc,
 	.statistics-grid .info-box .walesOnlyPc,
 	.statistics-grid .info-box .irelandOnlyPc,
 	.statistics-grid .info-box .nonukOnlyPc,
-	.statistics-grid .info-box .jump-indicator { flex: 0 0 auto; }
+	.statistics-grid .info-box .jump-indicator {
+		flex: 0 0 auto;
+	}
 }
 
 /* Small breakpoint: stack metrics on new line under label */
@@ -289,7 +294,7 @@ header h1.top-cat {
 		font-size: 1.05rem;
 		padding: 6px 8px;
 	}
-	.statistics-grid .info-box strong { flex: 1 0 100%; margin-bottom: 2px; }
+
 	.statistics-grid .info-box .ukOnly,
 	.statistics-grid .info-box .englandOnly,
 	.statistics-grid .info-box .scotlandOnly,
@@ -305,7 +310,9 @@ header h1.top-cat {
 	.statistics-grid .info-box .jump-indicator {
 		flex: 0 0 auto;
 	}
-	.statistics-grid .info-box .jump-indicator { margin-left: auto; }
+	.statistics-grid .info-box .jump-indicator {
+		margin-left: auto;
+	}
 }
 
 /* Narrow devices: shrink reserved column widths slightly */
@@ -368,28 +375,46 @@ a.sign.button1 {
 /* Responsive tightening for very small screens */
 /* Ultra-small devices (<=380px): tighten spacing further */
 @media (max-width: 380px) {
-	.statistics-grid .info-box { font-size: 1rem; gap: 0.45rem; }
-	.signature-counter .totalSigs { font-size: 3.1em; }
+	.statistics-grid .info-box {
+		font-size: 1rem;
+		gap: 0.45rem;
+	}
+	.signature-counter .totalSigs {
+		font-size: 3.1em;
+	}
 }
 
 /* Restore non-downscaled layout in the specific band 544px–580px */
 @media (min-width: 544px) and (max-width: 580px) {
-	.statistics-grid { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
-	.statistics-grid .info-box { flex-wrap: nowrap; font-size: 1.25rem; }
-	.statistics-grid .info-box strong { flex: 0 0 132px; }
+	.statistics-grid {
+		grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+	}
+	.statistics-grid .info-box {
+		flex-wrap: nowrap;
+		font-size: 1.25rem;
+	}
+	.statistics-grid .info-box strong {
+		flex: 0 0 132px;
+	}
 	.statistics-grid .info-box .ukOnly,
 	.statistics-grid .info-box .englandOnly,
 	.statistics-grid .info-box .scotlandOnly,
 	.statistics-grid .info-box .walesOnly,
 	.statistics-grid .info-box .irelandOnly,
-	.statistics-grid .info-box .nonukOnly { flex: 0 0 140px; }
+	.statistics-grid .info-box .nonukOnly {
+		flex: 0 0 140px;
+	}
 	.statistics-grid .info-box .ukOnlyPc,
 	.statistics-grid .info-box .englandOnlyPc,
 	.statistics-grid .info-box .scotlandOnlyPc,
 	.statistics-grid .info-box .walesOnlyPc,
 	.statistics-grid .info-box .irelandOnlyPc,
-	.statistics-grid .info-box .nonukOnlyPc { flex: 0 0 90px; }
-	.statistics-grid .info-box .jump-indicator { flex: 0 0 56px; }
+	.statistics-grid .info-box .nonukOnlyPc {
+		flex: 0 0 90px;
+	}
+	.statistics-grid .info-box .jump-indicator {
+		flex: 0 0 56px;
+	}
 }
 
 /* Smooth font scaling transitions when resizing */
@@ -416,7 +441,7 @@ a.sign.button1 {
 	padding: 2px;
 	background-color: #f2f2f2;
 	border-radius: 5px;
-	font-size: 1.25rem;
+	font-size: 1rem;
 	border: 1px solid #ccc;
 	margin-top: -1px;
 }
