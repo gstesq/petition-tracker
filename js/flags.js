@@ -65,7 +65,11 @@
 				// Hide/show dependent constituency block
 				const depWrap = document.getElementById("constituency-toggle-wrapper");
 				if (depWrap) {
-					depWrap.style.display = animationEnabled ? "contents" : "none";
+					if (animationEnabled) {
+						depWrap.classList.remove("is-hidden-dep");
+					} else {
+						depWrap.classList.add("is-hidden-dep");
+					}
 				}
 			});
 		if (c)
@@ -109,7 +113,8 @@
 					// Apply dependency visibility on init
 					const depWrap = document.getElementById("constituency-toggle-wrapper");
 					if (depWrap && flagCheckbox) {
-						depWrap.style.display = flagCheckbox.checked ? "contents" : "none";
+						if (flagCheckbox.checked) depWrap.classList.remove("is-hidden-dep");
+						else depWrap.classList.add("is-hidden-dep");
 					}
 		if (!_hiddenAccum || _hiddenAccum.length === 0) return;
 		const items = [];

@@ -1314,7 +1314,7 @@ h4 {
 	display: grid;
 	grid-template-columns: 1fr 1fr;
 	gap: 0.75rem;
-	padding: 0.75rem 0 0.25rem;
+	padding: 0.65rem 0 0.4rem;
 	border-top: none;
 }
 .settings-row.toggle-pair .toggle-cell {
@@ -1323,6 +1323,17 @@ h4 {
 .settings-row.toggle-pair .settings-block {
 	grid-column: auto;
 	min-height: 100%;
+}
+/* Smooth hide/show for dependent block */
+#constituency-toggle-wrapper {
+	transition: opacity 140ms ease, visibility 140ms ease, max-height 140ms ease;
+	opacity: 1;
+}
+#constituency-toggle-wrapper.is-hidden-dep {
+	opacity: 0;
+	max-height: 0;
+	visibility: hidden;
+	pointer-events: none;
 }
 @media (max-width: 640px) {
 	.settings-row.toggle-pair {
