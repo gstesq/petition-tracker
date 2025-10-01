@@ -226,10 +226,9 @@ class PetitionTracker {
 			this.historyStartTime = this.signatureHistoryData[0].timestamp;
 		}
 		if (!this.historyStartTime) return [];
-		// Use last known data timestamp to avoid creating a future empty slot that shows 0 jump
+		// Determine end of timeline: include the current active 10s slot even if no new data yet
 		const lastDataTimestamp = this.signatureHistoryData.length
-			? this.signatureHistoryData[this.signatureHistoryData.length - 1]
-					.timestamp
+			? this.signatureHistoryData[this.signatureHistoryData.length - 1].timestamp
 			: this.historyStartTime;
 		let span = lastDataTimestamp - this.historyStartTime;
 		if (span > MAX_DURATION) {
@@ -237,7 +236,7 @@ class PetitionTracker {
 			this.historyStartTime = lastDataTimestamp - MAX_DURATION;
 			span = MAX_DURATION;
 		}
-		const totalSlots = Math.floor(span / INTERVAL) + 1; // inclusive of first slot
+		const totalSlots = Math.floor(span / INTERVAL) + 1; // inclusive of first slot (0 index)
 		// Pointer over raw data (assumed sorted)
 		const data = this.signatureHistoryData;
 		let dataIdx = 0;
