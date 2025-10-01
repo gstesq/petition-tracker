@@ -362,6 +362,26 @@ a.sign.button1 {
 	.signature-counter .totalSigs { font-size: 3.1em; }
 }
 
+/* Restore non-downscaled layout in the specific band 544px–580px */
+@media (min-width: 544px) and (max-width: 580px) {
+	.statistics-grid { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+	.statistics-grid .info-box { flex-wrap: nowrap; font-size: 1.25rem; }
+	.statistics-grid .info-box strong { flex: 0 0 132px; }
+	.statistics-grid .info-box .ukOnly,
+	.statistics-grid .info-box .englandOnly,
+	.statistics-grid .info-box .scotlandOnly,
+	.statistics-grid .info-box .walesOnly,
+	.statistics-grid .info-box .irelandOnly,
+	.statistics-grid .info-box .nonukOnly { flex: 0 0 140px; }
+	.statistics-grid .info-box .ukOnlyPc,
+	.statistics-grid .info-box .englandOnlyPc,
+	.statistics-grid .info-box .scotlandOnlyPc,
+	.statistics-grid .info-box .walesOnlyPc,
+	.statistics-grid .info-box .irelandOnlyPc,
+	.statistics-grid .info-box .nonukOnlyPc { flex: 0 0 90px; }
+	.statistics-grid .info-box .jump-indicator { flex: 0 0 56px; }
+}
+
 /* Smooth font scaling transitions when resizing */
 header h1.top-cat,
 .signature-counter .totalSigs,
