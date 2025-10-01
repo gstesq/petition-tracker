@@ -20,6 +20,15 @@
 	const STORAGE_KEY_LABELS = "flagsLabels";
 	const STORAGE_KEY_MODE = "flagsMode";
 
+	function updateDependentVisibility() {
+		const flagCheckbox = document.getElementById("flag-toggle");
+		const enabled = flagCheckbox ? flagCheckbox.checked : animationEnabled;
+		const depWrap = document.getElementById("constituency-toggle-wrapper");
+		if (depWrap) depWrap.classList.toggle("is-hidden-dep", !enabled);
+		const animRow = document.getElementById("animation-mode-row");
+		if (animRow) animRow.classList.toggle("is-hidden-dep", !enabled);
+	}
+
 	function readToggles() {
 		try {
 			const stored = localStorage.getItem(STORAGE_KEY_ANIMATION);
@@ -62,15 +71,7 @@
 					const stateEl = document.getElementById("flag-toggle-state");
 					if (stateEl) stateEl.textContent = animationEnabled ? "On" : "Off";
 				}
-				// Hide/show dependent constituency block
-				const depWrap = document.getElementById("constituency-toggle-wrapper");
-				if (depWrap) {
-					if (animationEnabled) {
-						depWrap.classList.remove("is-hidden-dep");
-					} else {
-						depWrap.classList.add("is-hidden-dep");
-					}
-				}
+				updateDependentVisibility();
 			});
 		if (c)
 			c.addEventListener("change", (e) => {
@@ -110,12 +111,7 @@
 	let _hiddenAccum = [];
 
 	function _flushHiddenAccumulatedSpawns() {
-					// Apply dependency visibility on init
-					const depWrap = document.getElementById("constituency-toggle-wrapper");
-					if (depWrap && flagCheckbox) {
-						if (flagCheckbox.checked) depWrap.classList.remove("is-hidden-dep");
-						else depWrap.classList.add("is-hidden-dep");
-					}
+		// purely handles deferred flag spawns when tab refocuses
 		if (!_hiddenAccum || _hiddenAccum.length === 0) return;
 		const items = [];
 		_hiddenAccum.forEach((e) => {
@@ -555,6 +551,7 @@
 					labelCheckbox.dispatchEvent(new Event("change", { bubbles: true }));
 				});
 			}
+			updateDependentVisibility();
 		} catch (e) {
 			console.warn("[Flags] Failed to init settings-block toggles", e);
 		}
