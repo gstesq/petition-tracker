@@ -190,15 +190,23 @@ class PetitionTracker {
 		}
 		if (last) {
 			const gap = timestamp - last.timestamp;
-			// If gap is meaningfully larger than one interval, interpolate
 			if (gap > intervalMs * 1.2) {
-				const buckets = Math.floor(gap / intervalMs); // number of full 10s slots
+				const buckets = Math.floor(gap / intervalMs);
 				const delta = signatures - last.signatures;
 				if (delta > 0 && buckets > 0) {
-					const avg = delta / buckets;
+					// Distribute remaining delta as integers (no fractions) using floor + remainder
+					const base = Math.floor(delta / buckets);
+					let remainder = delta - base * buckets;
+					let cumulative = last.signatures;
 					for (let i = 1; i < buckets; i++) {
+						let increment = base;
+						if (remainder > 0) {
+							increment += 1;
+							remainder--;
+						}
+						cumulative += increment;
 						this.signatureHistoryData.push({
-							signatures: last.signatures + avg * i,
+							signatures: cumulative,
 							timestamp: last.timestamp + intervalMs * i,
 							_interpolated: true,
 						});
@@ -373,17 +381,31 @@ class PetitionTracker {
 		}
 
 		// If no data, clear the chart
-		const slots = this.buildAlignedSlots();
+		let slots = this.buildAlignedSlots();
+		// Remove trailing slot if it corresponds to the currently in-progress (not yet completed) 10s interval
+		if (slots.length > 1) {
+			const INTERVAL = 10000;
+			const nowTs = Date.now();
+			const lastSlot = slots[slots.length - 1];
+			// If we are still within the interval (less than INTERVAL since slot timestamp) and no newer real datapoint landed after slot creation
+			if (nowTs - lastSlot.timestamp < INTERVAL) {
+				// Keep it only if a real data sample matched that timestamp (i.e., actual signature point recorded exactly at slot boundary)
+				const hasExactPoint = this.signatureHistoryData.some(
+					(p) => p.timestamp === lastSlot.timestamp
+				);
+				if (!hasExactPoint) {
+					slots = slots.slice(0, -1);
+				}
+			}
+		}
 		if (slots.length < 2) {
 			chartContainer.innerHTML = "";
 			return;
 		}
 		const jumps = [];
 		for (let i = 1; i < slots.length; i++) {
-			const jumpVal = Math.max(
-				0,
-				slots[i].signatures - slots[i - 1].signatures
-			);
+			const rawDelta = slots[i].signatures - slots[i - 1].signatures;
+			const jumpVal = Math.max(0, Math.round(rawDelta));
 			jumps.push({ jump: jumpVal, timestamp: slots[i].timestamp });
 		}
 
