@@ -19,7 +19,7 @@ var totArr=[];
 
 //simple callout
 var say = function(x){
-	//console.log("Any issues email: online@gt-solutions.co.uk");
+	// Legacy host email reference removed
 	console.log(x);
 };
 

@@ -945,7 +945,7 @@ h4 {
 
 //.uk{background: url('https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.3.0/flags/1x1/gb.svg') no-repeat}
 
- .world{background: url('http://noeu.gt-solutions.co.uk/img/world.svg') no-repeat} */
+ /* Removed legacy host reference for .world background (old noeu.gt-solutions.co.uk) */
 
 /* Falling flags animation overlay */
 .flag-overlay {
