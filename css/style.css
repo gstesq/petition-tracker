@@ -328,7 +328,7 @@ a.sign.button1 {
 /* Ensure petition link (titleHeader) stands out */
 .titleHeader {
 	font-size: calc(1.8rem * var(--scale-base));
-	line-height: 0;
+	line-height: 1.2; /* improved readability on mobile */
 }
 
 /* Counter text bump */
