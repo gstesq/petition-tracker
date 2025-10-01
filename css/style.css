@@ -131,6 +131,15 @@ header h1.top-cat {
 	color: #1d68cd;
 	font-weight: 700;
 }
+/* Reduce layout shift: ensure container centers and doesn't reserve extra horizontal space */
+.signature-counter {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	max-width: 100%;
+	gap: 0.2rem;
+}
+.signature-counter .h1.totalSigs { letter-spacing: 0.5px; }
 
 .status-indicator h2 {
 	font-size: calc(1.25rem * var(--scale-base));
@@ -257,7 +266,8 @@ header h1.top-cat {
 		flex-wrap: wrap;
 		font-size: 1.15rem; /* slight downscale for fit */
 	}
-	.statistics-grid .info-box strong { flex: 1 1 160px; }
+	/* Allow label to shrink naturally without enforcing 160px min */
+	.statistics-grid .info-box strong { flex: 1 1 auto; min-width: 0; }
 	.statistics-grid .info-box .ukOnly,
 	.statistics-grid .info-box .englandOnly,
 	.statistics-grid .info-box .scotlandOnly,
