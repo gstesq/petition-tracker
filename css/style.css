@@ -1228,40 +1228,80 @@ h4 {
 	background: #fff;
 }
 
+/* Settings row grid: control (checkbox/select/button) | label | meta/description */
 .settings-row {
 	display: grid;
-	grid-template-columns: 28px 140px 1fr;
-	gap: 0.5rem 0.75rem;
-	align-items: center;
-	padding: 0.6rem 0;
+	/* control | label (flexible) | details */
+	grid-template-columns: min-content minmax(150px, 240px) 1fr;
+	gap: 0.55rem 0.9rem;
+	align-items: start;
+	padding: 0.75rem 0;
 	position: relative;
+	line-height: 1.25;
 }
-.settings-row + .settings-row {
-	border-top: 1px solid #f0f0f0;
-}
+.settings-row + .settings-row { border-top: 1px solid #ececec; }
+.settings-row:first-of-type { border-top: none; }
 
+/* Controls */
 .settings-row input[type="checkbox"] {
 	width: 18px;
 	height: 18px;
 	cursor: pointer;
+	align-self: center;
 }
 .settings-row select {
-	padding: 4px 6px;
-	font-size: 0.85rem;
+	padding: 6px 8px;
+	font-size: 0.9rem;
+	line-height: 1.2;
+	border: 1px solid #c9c9c9;
+	border-radius: 4px;
+	background: #fff;
+	grid-column: 3 / 4; /* keep label visible in its own column */
+	width: 100%;
+	max-width: 360px;
 }
 .settings-row button {
-	font-size: 0.75rem;
+	font-size: 0.8rem;
+	padding: 6px 10px;
+	grid-column: 2 / 3;
+	justify-self: start;
 }
+.settings-row select:focus-visible,
+.settings-row button:focus-visible,
+.settings-row input[type="checkbox"]:focus-visible { outline: 2px solid #1d68cd; outline-offset: 2px; }
 
 .settings-row label {
 	font-weight: 600;
-	font-size: 0.8rem;
+	font-size: 0.85rem;
+	letter-spacing: 0.25px;
+	align-self: center;
+	word-break: normal;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 .settings-row small {
-	grid-column: 3 / 4;
-	font-size: 0.7rem;
-	color: #666;
-	line-height: 1.2;
+	grid-column: 2 / 4;
+	font-size: 0.72rem;
+	color: #555;
+	line-height: 1.25;
+	margin-top: 2px;
+}
+
+/* Special handling for rows where the first element is a select (no checkbox) */
+/* Row variant: select is the first element (no leading checkbox) */
+.settings-row > select:first-child {
+	grid-column: 1 / 4; /* let the select span full width for readability */
+	max-width: 100%;
+}
+.settings-row > select:first-child + label {
+	grid-column: 1 / 3; /* place label on new line beneath select (shares space with desc) */
+	margin-top: 6px;
+	white-space: normal;
+	text-overflow: clip;
+}
+.settings-row > select:first-child ~ small {
+	grid-column: 1 / 4; /* description spans full width under label */
 }
 
 .button-reset {
@@ -1281,21 +1321,24 @@ h4 {
 	outline-offset: 2px;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 680px) {
+	#settings-content { padding: 0.35rem 0.75rem 0.85rem; }
 	.settings-row {
-		grid-template-columns: 22px 1fr;
+		grid-template-columns: min-content 1fr; /* control + everything */
+		gap: 0.6rem 0.75rem;
+		padding: 0.7rem 0;
 	}
-	.settings-row label {
-		grid-column: 2 / 3;
-	}
-	.settings-row small {
-		grid-column: 2 / 3;
-		margin-left: 0;
-	}
-	.settings-row select,
-	.settings-row button {
-		grid-column: 2 / 3;
-	}
+	.settings-row select { grid-column: 2 / 3; max-width: 100%; }
+	.settings-row button { grid-column: 2 / 3; }
+	.settings-row label { grid-column: 2 / 3; white-space: normal; }
+	.settings-row small { grid-column: 2 / 3; }
+}
+
+@media (max-width: 420px) {
+	.settings-row { padding: 0.6rem 0; }
+	.settings-row select { font-size: 0.85rem; }
+	.settings-row label { font-size: 0.8rem; }
+	.settings-row small { font-size: 0.68rem; }
 }
 
 /* --- End Settings Panel --- */
