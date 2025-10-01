@@ -224,13 +224,26 @@
 						aria-label="Display and animation settings"
 					>
 						<div class="settings-row">
+							<button
+								type="button"
+								class="settings-block"
+								id="flag-toggle-block"
+								aria-pressed="false"
+								aria-controls="flag-toggle"
+								aria-label="Toggle falling flags animation"
+							>
+								<span class="block-title">Falling flags</span>
+								<span class="block-desc"
+									>Toggle flags that fall for new signatures</span
+								>
+								<span class="block-state" id="flag-toggle-state">Off</span>
+							</button>
 							<input
 								type="checkbox"
 								id="flag-toggle"
-								aria-label="Toggle falling flags animation"
+								class="visually-hidden"
+								hidden
 							/>
-							<label for="flag-toggle">Falling flags</label>
-							<small>Toggle flags that fall for new signatures</small>
 						</div>
 						<div class="settings-row">
 							<select id="animation-mode" aria-label="Select animation style">
@@ -245,27 +258,42 @@
 							>
 						</div>
 						<div class="settings-row">
+							<button
+								type="button"
+								class="settings-block"
+								id="constituency-labels-block"
+								aria-pressed="true"
+								aria-controls="constituency-labels-toggle"
+								aria-label="Toggle constituency labels on flags"
+							>
+								<span class="block-title">Constituency labels</span>
+								<span class="block-desc"
+									>Show constituency names on UK flags</span
+								>
+								<span class="block-state" id="constituency-labels-state"
+									>On</span
+								>
+							</button>
 							<input
 								type="checkbox"
 								id="constituency-labels-toggle"
-								aria-label="Toggle constituency labels on flags"
+								class="visually-hidden"
+								hidden
 								checked
 							/>
-							<label for="constituency-labels-toggle"
-								>Show constituency labels</label
-							>
-							<small>Show constituency names on UK flags</small>
 						</div>
 						<div class="settings-row">
 							<button
+								type="button"
 								id="reset-graph-btn"
-								class="button-reset"
+								class="settings-block danger"
 								aria-label="Reset graph data"
 							>
-								Reset Graph Data
+								<span class="block-title">Reset Graph</span>
+								<span class="block-desc"
+									>Clear all graph history and start fresh</span
+								>
 							</button>
-							<label for="reset-graph-btn">Reset Graph</label>
-							<small>Clear all graph history and start fresh</small>
 						</div>
 					</div>
 				</div>

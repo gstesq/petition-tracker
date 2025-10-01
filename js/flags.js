@@ -52,6 +52,16 @@
 				try {
 					localStorage.setItem(STORAGE_KEY_ANIMATION, animationEnabled);
 				} catch (err) {}
+				// Sync block UI if present
+				const block = document.getElementById("flag-toggle-block");
+				if (block) {
+					block.setAttribute(
+						"aria-pressed",
+						animationEnabled ? "true" : "false"
+					);
+					const stateEl = document.getElementById("flag-toggle-state");
+					if (stateEl) stateEl.textContent = animationEnabled ? "On" : "Off";
+				}
 			});
 		if (c)
 			c.addEventListener("change", (e) => {
@@ -60,6 +70,17 @@
 					localStorage.setItem(STORAGE_KEY_LABELS, showConstituencyLabels);
 				} catch (err) {}
 				applyToggleToExistingFlags();
+				// Sync block UI if present
+				const block = document.getElementById("constituency-labels-block");
+				if (block) {
+					block.setAttribute(
+						"aria-pressed",
+						showConstituencyLabels ? "true" : "false"
+					);
+					const stateEl = document.getElementById("constituency-labels-state");
+					if (stateEl)
+						stateEl.textContent = showConstituencyLabels ? "On" : "Off";
+				}
 			});
 		if (m)
 			m.addEventListener("change", (e) => {
@@ -487,6 +508,41 @@
 		ensureFlagOverlay();
 		readToggles();
 		installWrapper();
+		// Initialize block states to reflect current preferences
+		try {
+			const flagBlock = document.getElementById("flag-toggle-block");
+			const flagCheckbox = document.getElementById("flag-toggle");
+			if (flagBlock && flagCheckbox) {
+				flagBlock.setAttribute(
+					"aria-pressed",
+					flagCheckbox.checked ? "true" : "false"
+				);
+				const s = document.getElementById("flag-toggle-state");
+				if (s) s.textContent = flagCheckbox.checked ? "On" : "Off";
+				flagBlock.addEventListener("click", () => {
+					flagCheckbox.checked = !flagCheckbox.checked;
+					flagCheckbox.dispatchEvent(new Event("change", { bubbles: true }));
+				});
+			}
+			const labelBlock = document.getElementById("constituency-labels-block");
+			const labelCheckbox = document.getElementById(
+				"constituency-labels-toggle"
+			);
+			if (labelBlock && labelCheckbox) {
+				labelBlock.setAttribute(
+					"aria-pressed",
+					labelCheckbox.checked ? "true" : "false"
+				);
+				const s2 = document.getElementById("constituency-labels-state");
+				if (s2) s2.textContent = labelCheckbox.checked ? "On" : "Off";
+				labelBlock.addEventListener("click", () => {
+					labelCheckbox.checked = !labelCheckbox.checked;
+					labelCheckbox.dispatchEvent(new Event("change", { bubbles: true }));
+				});
+			}
+		} catch (e) {
+			console.warn("[Flags] Failed to init settings-block toggles", e);
+		}
 	});
 
 	document.addEventListener("DOMContentLoaded", () => {
