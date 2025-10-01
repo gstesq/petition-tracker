@@ -62,6 +62,11 @@
 					const stateEl = document.getElementById("flag-toggle-state");
 					if (stateEl) stateEl.textContent = animationEnabled ? "On" : "Off";
 				}
+				// Hide/show dependent constituency block
+				const depWrap = document.getElementById("constituency-toggle-wrapper");
+				if (depWrap) {
+					depWrap.style.display = animationEnabled ? "contents" : "none";
+				}
 			});
 		if (c)
 			c.addEventListener("change", (e) => {
@@ -101,6 +106,11 @@
 	let _hiddenAccum = [];
 
 	function _flushHiddenAccumulatedSpawns() {
+					// Apply dependency visibility on init
+					const depWrap = document.getElementById("constituency-toggle-wrapper");
+					if (depWrap && flagCheckbox) {
+						depWrap.style.display = flagCheckbox.checked ? "contents" : "none";
+					}
 		if (!_hiddenAccum || _hiddenAccum.length === 0) return;
 		const items = [];
 		_hiddenAccum.forEach((e) => {

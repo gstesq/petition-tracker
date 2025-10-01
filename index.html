@@ -224,26 +224,54 @@
 						aria-label="Display and animation settings"
 					>
 						<div class="settings-row">
-							<button
-								type="button"
-								class="settings-block"
-								id="flag-toggle-block"
-								aria-pressed="false"
-								aria-controls="flag-toggle"
-								aria-label="Toggle falling flags animation"
-							>
-								<span class="block-title">Falling flags</span>
-								<span class="block-desc"
-									>Toggle flags that fall for new signatures</span
+						<div class="settings-row toggle-pair" role="group" aria-label="Flag display options">
+							<div class="toggle-cell">
+								<button
+									type="button"
+									class="settings-block"
+									id="flag-toggle-block"
+									aria-pressed="false"
+									aria-controls="flag-toggle"
+									aria-label="Toggle falling flags animation"
 								>
-								<span class="block-state" id="flag-toggle-state">Off</span>
-							</button>
-							<input
-								type="checkbox"
-								id="flag-toggle"
-								class="visually-hidden"
-								hidden
-							/>
+									<span class="block-title">Falling flags</span>
+									<span class="block-desc"
+										>Toggle flags that fall for new signatures</span
+									>
+									<span class="block-state" id="flag-toggle-state">Off</span>
+								</button>
+								<input
+									type="checkbox"
+									id="flag-toggle"
+									class="visually-hidden"
+									hidden
+								/>
+							</div>
+							<div class="toggle-cell" id="constituency-toggle-wrapper">
+								<button
+									type="button"
+									class="settings-block"
+									id="constituency-labels-block"
+									aria-pressed="true"
+									aria-controls="constituency-labels-toggle"
+									aria-label="Toggle constituency labels on flags"
+								>
+									<span class="block-title">Constituency labels</span>
+									<span class="block-desc"
+										>Show constituency names on UK flags</span
+									>
+									<span class="block-state" id="constituency-labels-state"
+										>On</span
+									>
+								</button>
+								<input
+									type="checkbox"
+									id="constituency-labels-toggle"
+									class="visually-hidden"
+									hidden
+									checked
+								/>
+							</div>
 						</div>
 						<div class="settings-row">
 							<select id="animation-mode" aria-label="Select animation style">
@@ -256,31 +284,6 @@
 								>"Drop" shows all flags at once, "Stream" spreads them
 								out</small
 							>
-						</div>
-						<div class="settings-row">
-							<button
-								type="button"
-								class="settings-block"
-								id="constituency-labels-block"
-								aria-pressed="true"
-								aria-controls="constituency-labels-toggle"
-								aria-label="Toggle constituency labels on flags"
-							>
-								<span class="block-title">Constituency labels</span>
-								<span class="block-desc"
-									>Show constituency names on UK flags</span
-								>
-								<span class="block-state" id="constituency-labels-state"
-									>On</span
-								>
-							</button>
-							<input
-								type="checkbox"
-								id="constituency-labels-toggle"
-								class="visually-hidden"
-								hidden
-								checked
-							/>
 						</div>
 						<div class="settings-row">
 							<button
