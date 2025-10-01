@@ -270,10 +270,16 @@
 			const msgEl = document.createElement("div");
 			msgEl.className = "balloon-message";
 			msgEl.textContent = message || "";
-			if (
-				!showConstituencyLabels &&
-				/\b(Constituency)\b/i.test(message || "")
-			) {
+			// Provide parity with drop/stream: tag messages so global toggle logic can act.
+			const isUK = isUKFlagUrl(flagUrl || "");
+			// Treat any UK region march label as constituency-style so it can be toggled off.
+			if (isUK && (message || "").trim().length) {
+				msgEl.setAttribute("data-constituency-flag", "true");
+			} else {
+				msgEl.setAttribute("data-constituency-flag", "false");
+			}
+			msgEl.setAttribute("data-is-uk-flag", isUK ? "true" : "false");
+			if (!showConstituencyLabels && msgEl.getAttribute("data-constituency-flag") === "true") {
 				msgEl.style.display = "none";
 			}
 			wrapper.appendChild(flagEl);
@@ -342,14 +348,13 @@
 		if (!overlay) return;
 		overlay.querySelectorAll(".balloon-message").forEach((msgEl) => {
 			const isCon = msgEl.getAttribute("data-constituency-flag") === "true";
-			if (isCon) {
-				if (showConstituencyLabels) {
-					msgEl.style.removeProperty("display");
-					msgEl.style.setProperty("display", "block", "important");
-					msgEl.style.setProperty("visibility", "visible", "important");
-				} else {
-					msgEl.style.setProperty("display", "none", "important");
-				}
+			if (!isCon) return; // only toggle designated constituency-style labels
+			if (showConstituencyLabels) {
+				msgEl.style.removeProperty("display");
+				msgEl.style.setProperty("display", "block", "important");
+				msgEl.style.setProperty("visibility", "visible", "important");
+			} else {
+				msgEl.style.setProperty("display", "none", "important");
 			}
 		});
 	}
