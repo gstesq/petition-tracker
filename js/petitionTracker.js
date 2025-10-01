@@ -218,7 +218,7 @@ class PetitionTracker {
 		this.updateHistoryChart();
 	}
 
-	// Build aligned 10s slot series up to 1 hour (360 slots max)
+	// Build aligned 10s slot series up to 1 hour (360 slots max). Includes zero-change slots.
 	buildAlignedSlots() {
 		const INTERVAL = 10000; // 10s
 		const MAX_DURATION = 3600000; // 1h in ms
@@ -226,29 +226,24 @@ class PetitionTracker {
 			this.historyStartTime = this.signatureHistoryData[0].timestamp;
 		}
 		if (!this.historyStartTime) return [];
-		// Determine end of timeline: include the current active 10s slot even if no new data yet
 		const lastDataTimestamp = this.signatureHistoryData.length
-			? this.signatureHistoryData[this.signatureHistoryData.length - 1].timestamp
+			? this.signatureHistoryData[this.signatureHistoryData.length - 1]
+					.timestamp
 			: this.historyStartTime;
 		let span = lastDataTimestamp - this.historyStartTime;
 		if (span > MAX_DURATION) {
-			// slide window forward keeping last hour
 			this.historyStartTime = lastDataTimestamp - MAX_DURATION;
 			span = MAX_DURATION;
 		}
-		const totalSlots = Math.floor(span / INTERVAL) + 1; // inclusive of first slot (0 index)
-		// Pointer over raw data (assumed sorted)
+		let totalSlots = Math.floor(span / INTERVAL) + 1; // include slot for last data point
+		if (totalSlots > 360) totalSlots = 360;
 		const data = this.signatureHistoryData;
 		let dataIdx = 0;
 		let lastValue = data.length ? data[0].signatures : 0;
 		const slots = [];
-		for (let i = 0; i < totalSlots && i < 360; i++) {
+		for (let i = 0; i < totalSlots; i++) {
 			const slotTs = this.historyStartTime + i * INTERVAL;
-			// advance dataIdx while data point timestamp <= slotTs
-			while (
-				dataIdx < data.length &&
-				data[dataIdx].timestamp <= slotTs + 2 // slight tolerance
-			) {
+			while (dataIdx < data.length && data[dataIdx].timestamp <= slotTs + 2) {
 				lastValue = data[dataIdx].signatures;
 				dataIdx++;
 			}
@@ -468,19 +463,22 @@ class PetitionTracker {
 			});
 			svg += `<path d="${path}" stroke="#4caf50" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
 
+			const zeroY = height - padding - (0 / yAxisMax) * (height - padding * 2);
+			// Plot every point, differentiate zero vs non-zero
 			displayData.forEach((point, index) => {
+				const x =
+					padding + (index / (displayData.length - 1)) * (width - padding * 2);
+				const y =
+					height -
+					padding -
+					(Math.min(point.jump, yAxisMax) / yAxisMax) * (height - padding * 2);
 				if (point.jump > 0) {
-					const x =
-						padding +
-						(index / (displayData.length - 1)) * (width - padding * 2);
-					const y =
-						height -
-						padding -
-						(Math.min(point.jump, yAxisMax) / yAxisMax) *
-							(height - padding * 2);
 					const radius =
 						point.jump > yAxisMax / 2 ? 3 : point.jump > yAxisMax / 4 ? 2 : 1.5;
-					svg += `<circle cx="${x}" cy="${y}" r="${radius}" fill="#4caf50" opacity="0.8"/>`;
+					svg += `<circle cx="${x}" cy="${y}" r="${radius}" fill="#4caf50" opacity="0.85"/>`;
+				} else {
+					// zero jump: small hollow marker on zero line
+					svg += `<circle cx="${x}" cy="${zeroY}" r="1.4" fill="#fff" stroke="#4caf50" stroke-width="1" opacity="0.55"/>`;
 				}
 			});
 		}
