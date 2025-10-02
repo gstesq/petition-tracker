@@ -1,3 +1,7 @@
+// LEGACY FILE (deprecated)
+// This older refactored variant of PetitionTracker is no longer used.
+// Retained temporarily for reference. Active implementation: js/petitionTracker.js
+// Safe to delete once no longer needed.
 // Petition Tracker Application
 // Modernized and refactored for better maintainability
 

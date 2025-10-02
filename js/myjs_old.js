@@ -1,3 +1,5 @@
+// LEGACY VERY OLD IMPLEMENTATION (deprecated) - not loaded by index.html any more.
+// Safe to remove after verification.
 //set title
 var title;
 

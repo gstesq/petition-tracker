@@ -1,6 +1,7 @@
 /**
- * Modern Counter Animation Utility
- * Provides smooth number counting animations for petition signature displays
+ * LEGACY / UNUSED: Counter animation utility.
+ * Current PetitionTracker handles its own counting animation.
+ * Remove this file if no external references rely on jQuery plugins defined below.
  */
 
 class CounterAnimator {
