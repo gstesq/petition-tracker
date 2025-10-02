@@ -693,10 +693,17 @@ class PetitionTracker {
 			if (regionKey === "nonUk") {
 				const countryJumps = this.getCountryJumps();
 				countryJumps.forEach((country) => {
-					if (typeof window.spawnFlags === "function") {
-						const flagUrl = `https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.3.0/flags/4x3/${country.code.toLowerCase()}.svg`;
-						window.spawnFlags(flagUrl, country.jump, country.name);
-					}
+					if (typeof window.spawnFlags !== "function") return;
+					const rawCode = (country.code || "").toLowerCase();
+					// Use flag only for valid 2-letter non-GB ISO codes; otherwise force neutral globe.
+					const useFlag = /^[a-z]{2}$/.test(rawCode) && rawCode !== "gb";
+					let flagUrl = useFlag
+						? `https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.3.0/flags/4x3/${rawCode}.svg`
+						: null;
+					const label = country.name && country.name.trim().length
+						? country.name
+						: "Non-UK";
+					window.spawnFlags(flagUrl, country.jump, label);
 				});
 			} else {
 				// Find the corresponding constituency jumps for UK regions

@@ -193,10 +193,20 @@
 				wrapper.dataset.leftFraction = Math.random().toString();
 				const flagEl = document.createElement("div");
 				flagEl.className = "balloon-flag";
+				// Robust load + fallback: some country codes (e.g. XK) may not exist in the CDN.
+				// We attempt to preload; on failure we show a neutral globe so the spawn is still visible.
 				if (flagUrl) {
-					flagEl.style.backgroundImage = `url('${flagUrl}')`;
+					const testImg = new Image();
+					testImg.onload = () => {
+						flagEl.style.backgroundImage = `url('${flagUrl}')`;
+					};
+					testImg.onerror = () => {
+						flagEl.classList.add("neutral","neutral-non-uk");
+						flagEl.textContent = "🌐";
+					};
+					testImg.src = flagUrl;
 				} else {
-					flagEl.classList.add("neutral");
+					flagEl.classList.add("neutral","neutral-non-uk");
 					flagEl.textContent = "🌐";
 				}
 				const stringEl = document.createElement("div");
