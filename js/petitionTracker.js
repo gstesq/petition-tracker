@@ -692,26 +692,37 @@ class PetitionTracker {
 
 			if (regionKey === "nonUk") {
 				const countryJumps = this.getCountryJumps();
-				// Diagnostic: track how many spawns we attempt for transparency
-				let attempted = 0;
-				countryJumps.forEach((country) => {
-					if (typeof window.spawnFlags !== "function") return;
-					const rawCode = (country.code || "").toLowerCase();
-					// Use flag only for valid 2-letter non-GB ISO codes; otherwise force neutral globe.
-					const useFlag = /^[a-z]{2}$/.test(rawCode) && rawCode !== "gb";
-					let flagUrl = useFlag
-						? `https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.3.0/flags/4x3/${rawCode}.svg`
-						: null;
-					const label =
-						country.name && country.name.trim().length
-							? country.name
-							: "Non-UK";
-					window.spawnFlags(flagUrl, country.jump, label);
-					attempted += country.jump;
-				});
-				if (attempted === 0 && countryJumps.length) {
-					// Rare edge: list had entries but zero total jump (shouldn't happen after filter) – log once.
-					console.debug("Non-UK jump list contained entries but no positive deltas.", countryJumps);
+				if (typeof window.spawnFlags === "function") {
+					let totalSpawnDelta = 0;
+					countryJumps.forEach((country) => {
+						const rawCode = (country.code || "").toLowerCase();
+						const useFlag = /^[a-z]{2}$/.test(rawCode) && rawCode !== "gb";
+						let flagUrl = useFlag
+							? `https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.3.0/flags/4x3/${rawCode}.svg`
+							: null;
+						const label =
+							country.name && country.name.trim().length
+								? country.name
+								: "Non-UK";
+						let remaining = country.jump;
+						while (remaining > 0) {
+							const batch = remaining > 100 ? 100 : remaining; // spawnFlags cap per call
+							window.spawnFlags(flagUrl, batch, label);
+							remaining -= batch;
+						}
+						totalSpawnDelta += country.jump;
+					});
+					if (totalSpawnDelta < jump) {
+						let remainder = jump - totalSpawnDelta;
+						console.debug(
+							`Non-UK remainder detected (region jump ${jump} > summed country jumps ${totalSpawnDelta}). Spawning ${remainder} placeholder(s).`
+						);
+						while (remainder > 0) {
+							const batch = remainder > 100 ? 100 : remainder;
+							window.spawnFlags(null, batch, "Non-UK");
+							remainder -= batch;
+						}
+					}
 				}
 			} else {
 				// Find the corresponding constituency jumps for UK regions
