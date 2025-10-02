@@ -279,6 +279,37 @@ class PetitionTracker {
 		}
 	}
 
+	// Build slots then trim any trailing partial slot (not yet completed interval)
+	_buildCompletedSlotsForJumps() {
+		let slots = this.buildAlignedSlots();
+		if (slots.length > 1) {
+			const INTERVAL = 10000;
+			const nowTs = Date.now();
+			const lastSlot = slots[slots.length - 1];
+			if (nowTs - lastSlot.timestamp < INTERVAL) {
+				const hasExactPoint = this.signatureHistoryData.some(
+					(p) => p.timestamp === lastSlot.timestamp
+				);
+				if (!hasExactPoint) {
+					slots = slots.slice(0, -1);
+				}
+			}
+		}
+		return slots;
+	}
+
+	_computeJumps() {
+		const slots = this._buildCompletedSlotsForJumps();
+		if (slots.length < 2) return { slots, jumps: [] };
+		const jumps = [];
+		for (let i = 1; i < slots.length; i++) {
+			const rawDelta = slots[i].signatures - slots[i - 1].signatures;
+			const jumpVal = Math.max(0, Math.round(rawDelta));
+			jumps.push({ jump: jumpVal, timestamp: slots[i].timestamp });
+		}
+		return { slots, jumps };
+	}
+
 	renderRawChart() {
 		const chartContainer = document.querySelector(".history-chart");
 		if (!chartContainer) return;
@@ -385,33 +416,13 @@ class PetitionTracker {
 			return;
 		}
 
-		// Build slots strictly up to last known data. Trim any trailing partial interval that doesn't
-		// correspond to a real sample to avoid speculative zeros.
-		let slots = this.buildAlignedSlots();
-		if (slots.length > 1) {
-			const INTERVAL = 10000;
-			const nowTs = Date.now();
-			const lastSlot = slots[slots.length - 1];
-			if (nowTs - lastSlot.timestamp < INTERVAL) {
-				const hasExactPoint = this.signatureHistoryData.some(
-					(p) => p.timestamp === lastSlot.timestamp
-				);
-				if (!hasExactPoint) {
-					slots = slots.slice(0, -1);
-				}
-			}
-		}
+		const { slots, jumps } = this._computeJumps();
 		if (slots.length < 2) {
 			chartContainer.innerHTML = "";
 			return;
 		}
-		const jumps = [];
-		for (let i = 1; i < slots.length; i++) {
-			const rawDelta = slots[i].signatures - slots[i - 1].signatures;
-			const jumpVal = Math.max(0, Math.round(rawDelta));
-			jumps.push({ jump: jumpVal, timestamp: slots[i].timestamp });
-		}
-		// No fabrication needed: buildAlignedSlots now extends to current aligned time capturing zero-activity intervals.
+		// Store latest jump so status text can reuse exact same value
+		this._latestComputedJump = jumps.length ? jumps[jumps.length - 1].jump : null;
 
 		// --- Dynamic Y-axis Logic ---
 		const maxJump = Math.max(...jumps.map((j) => j.jump), 0);
@@ -1031,21 +1042,20 @@ class PetitionTracker {
 		const jumpElement = document.querySelector(".jump");
 		if (!jumpElement) return;
 
-		if (this.signatureHistory.length < 2) {
-			jumpElement.textContent = "Updated successfully";
-			jumpElement.style.color = "#4caf50";
+		// Prefer already computed jump from chart render if available & fresh; else recompute.
+		let jumpVal = this._latestComputedJump;
+		if (jumpVal === undefined) {
+			const { jumps } = this._computeJumps();
+			jumpVal = jumps.length ? jumps[jumps.length - 1].jump : null;
+		}
+		if (jumpVal === null) {
+			jumpElement.textContent = "Waiting for data...";
+			jumpElement.style.color = "#666";
 			return;
 		}
-
-		const jump = this.signatureHistory[1] - this.signatureHistory[0];
-		if (jump === 0) {
-			jumpElement.textContent = "No new signatures in the past 10 seconds";
-			jumpElement.style.color = "#666";
-		} else {
-			const jumpText = jump >= 0 ? `+${jump}` : jump.toString();
-			const colorClass = jump >= 0 ? "green" : "red";
-			jumpElement.innerHTML = `Jump: <strong class="${colorClass}">${jumpText}</strong> in the past 10 seconds`;
-		}
+		const colorClass = jumpVal > 0 ? "green" : "grey";
+		jumpElement.innerHTML = `Jump: <strong class="${colorClass}">+${jumpVal}</strong> in the past 10 seconds`;
+		jumpElement.style.color = jumpVal > 0 ? "#2e7d32" : "#555";
 	}
 
 	animateCounter(selector, targetValue, opts = {}) {
