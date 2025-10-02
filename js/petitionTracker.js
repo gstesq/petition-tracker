@@ -422,7 +422,9 @@ class PetitionTracker {
 			return;
 		}
 		// Store latest jump so status text can reuse exact same value
-		this._latestComputedJump = jumps.length ? jumps[jumps.length - 1].jump : null;
+		this._latestComputedJump = jumps.length
+			? jumps[jumps.length - 1].jump
+			: null;
 
 		// --- Dynamic Y-axis Logic ---
 		const maxJump = Math.max(...jumps.map((j) => j.jump), 0);
