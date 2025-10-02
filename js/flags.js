@@ -203,7 +203,7 @@
 						if (cache.get(flagUrl) === true) {
 							flagEl.style.backgroundImage = `url('${flagUrl}')`;
 						} else {
-							flagEl.classList.add("neutral","neutral-non-uk");
+							flagEl.classList.add("neutral", "neutral-non-uk");
 							flagEl.textContent = "🌐";
 						}
 					} else {
@@ -214,13 +214,13 @@
 						};
 						testImg.onerror = () => {
 							cache.set(flagUrl, false);
-							flagEl.classList.add("neutral","neutral-non-uk");
+							flagEl.classList.add("neutral", "neutral-non-uk");
 							flagEl.textContent = "🌐";
 						};
 						testImg.src = flagUrl;
 					}
 				} else {
-					flagEl.classList.add("neutral","neutral-non-uk");
+					flagEl.classList.add("neutral", "neutral-non-uk");
 					flagEl.textContent = "🌐";
 				}
 				const stringEl = document.createElement("div");
