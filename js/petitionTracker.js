@@ -692,6 +692,8 @@ class PetitionTracker {
 
 			if (regionKey === "nonUk") {
 				const countryJumps = this.getCountryJumps();
+				// Diagnostic: track how many spawns we attempt for transparency
+				let attempted = 0;
 				countryJumps.forEach((country) => {
 					if (typeof window.spawnFlags !== "function") return;
 					const rawCode = (country.code || "").toLowerCase();
@@ -700,11 +702,17 @@ class PetitionTracker {
 					let flagUrl = useFlag
 						? `https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.3.0/flags/4x3/${rawCode}.svg`
 						: null;
-					const label = country.name && country.name.trim().length
-						? country.name
-						: "Non-UK";
+					const label =
+						country.name && country.name.trim().length
+							? country.name
+							: "Non-UK";
 					window.spawnFlags(flagUrl, country.jump, label);
+					attempted += country.jump;
 				});
+				if (attempted === 0 && countryJumps.length) {
+					// Rare edge: list had entries but zero total jump (shouldn't happen after filter) – log once.
+					console.debug("Non-UK jump list contained entries but no positive deltas.", countryJumps);
+				}
 			} else {
 				// Find the corresponding constituency jumps for UK regions
 				const constituencyJumps = this.getConstituencyJumps(regionKey);

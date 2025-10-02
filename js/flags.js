@@ -146,6 +146,8 @@
 	});
 
 	function spawnFlags(flagUrl, count, message) {
+		// Maintain a cache of tested flag URLs (success/fail) to avoid repeated 404 fetches
+		window._flagAvailabilityCache = window._flagAvailabilityCache || new Map();
 		if (!animationEnabled) return;
 		if (!count || count < 1) count = 1;
 		const overlay = ensureFlagOverlay();
@@ -196,15 +198,27 @@
 				// Robust load + fallback: some country codes (e.g. XK) may not exist in the CDN.
 				// We attempt to preload; on failure we show a neutral globe so the spawn is still visible.
 				if (flagUrl) {
-					const testImg = new Image();
-					testImg.onload = () => {
-						flagEl.style.backgroundImage = `url('${flagUrl}')`;
-					};
-					testImg.onerror = () => {
-						flagEl.classList.add("neutral","neutral-non-uk");
-						flagEl.textContent = "🌐";
-					};
-					testImg.src = flagUrl;
+					const cache = window._flagAvailabilityCache;
+					if (cache.has(flagUrl)) {
+						if (cache.get(flagUrl) === true) {
+							flagEl.style.backgroundImage = `url('${flagUrl}')`;
+						} else {
+							flagEl.classList.add("neutral","neutral-non-uk");
+							flagEl.textContent = "🌐";
+						}
+					} else {
+						const testImg = new Image();
+						testImg.onload = () => {
+							cache.set(flagUrl, true);
+							flagEl.style.backgroundImage = `url('${flagUrl}')`;
+						};
+						testImg.onerror = () => {
+							cache.set(flagUrl, false);
+							flagEl.classList.add("neutral","neutral-non-uk");
+							flagEl.textContent = "🌐";
+						};
+						testImg.src = flagUrl;
+					}
 				} else {
 					flagEl.classList.add("neutral","neutral-non-uk");
 					flagEl.textContent = "🌐";
