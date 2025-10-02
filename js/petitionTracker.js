@@ -280,35 +280,7 @@ class PetitionTracker {
 	}
 
 	// Build slots then trim any trailing partial slot (not yet completed interval)
-	_buildCompletedSlotsForJumps() {
-		let slots = this.buildAlignedSlots();
-		if (slots.length > 1) {
-			const INTERVAL = 10000;
-			const nowTs = Date.now();
-			const lastSlot = slots[slots.length - 1];
-			if (nowTs - lastSlot.timestamp < INTERVAL) {
-				const hasExactPoint = this.signatureHistoryData.some(
-					(p) => p.timestamp === lastSlot.timestamp
-				);
-				if (!hasExactPoint) {
-					slots = slots.slice(0, -1);
-				}
-			}
-		}
-		return slots;
-	}
-
-	_computeJumps() {
-		const slots = this._buildCompletedSlotsForJumps();
-		if (slots.length < 2) return { slots, jumps: [] };
-		const jumps = [];
-		for (let i = 1; i < slots.length; i++) {
-			const rawDelta = slots[i].signatures - slots[i - 1].signatures;
-			const jumpVal = Math.max(0, Math.round(rawDelta));
-			jumps.push({ jump: jumpVal, timestamp: slots[i].timestamp });
-		}
-		return { slots, jumps };
-	}
+	// Legacy slot/jump computation removed (now using direct per-fetch diffs)
 
 	renderRawChart() {
 		const chartContainer = document.querySelector(".history-chart");
@@ -410,59 +382,60 @@ class PetitionTracker {
 	}
 
 	renderJumpsChart() {
+		/*
+		 * Simplified per-fetch jump chart.
+		 * Instead of slot-aligned historical reconstruction, we directly plot the
+		 * actual per-fetch deltas (currentTotal - previousTotal). This guarantees the
+		 * chart's "Latest" label is ALWAYS the exact same value shown in the status
+		 * jump text because updateSignatureJump now only reads _latestComputedJump
+		 * which we set here.
+		 */
 		const chartContainer = document.querySelector(".history-chart");
-		if (!chartContainer) {
-			console.warn("History chart container not found.");
-			return;
-		}
+		if (!chartContainer) return;
 
-		const { slots, jumps } = this._computeJumps();
-		if (slots.length < 2) {
+		// Need at least two points to derive a delta
+		if (!this.signatureHistoryData || this.signatureHistoryData.length < 2) {
 			chartContainer.innerHTML = "";
+			this._latestComputedJump = null;
 			return;
 		}
-		// Store latest jump so status text can reuse exact same value
-		this._latestComputedJump = jumps.length
-			? jumps[jumps.length - 1].jump
-			: null;
 
-		// --- Dynamic Y-axis Logic ---
-		const maxJump = Math.max(...jumps.map((j) => j.jump), 0);
+		// Build jump series from consecutive real (or interpolated) points
+		// Keep last 360 (1 hour @10s) differences.
+		const raw = this.signatureHistoryData.slice(-361); // need previous point for first diff
+		const diffs = [];
+		for (let i = 1; i < raw.length; i++) {
+			const jump = Math.max(0, raw[i].signatures - raw[i - 1].signatures);
+			diffs.push({ jump, timestamp: raw[i].timestamp });
+		}
+		const displayData = diffs.slice(-360);
+		if (!displayData.length) {
+			chartContainer.innerHTML = "";
+			this._latestComputedJump = null;
+			return;
+		}
 
-		// Adjust Y-axis max. Allow very small scales (down to 5 then 1) for low activity.
+		// Latest jump value for status
+		this._latestComputedJump = displayData[displayData.length - 1].jump;
+
+		const maxJump = Math.max(...displayData.map((d) => d.jump), 0);
 		if (maxJump > this.chartYMax) {
-			// Round up to a "nice" number (e.g., 5, 10, 20, 50, 100, 150)
-			if (maxJump <= 5) {
-				this.chartYMax = 5; // micro scale
-			} else if (maxJump <= 10) {
-				this.chartYMax = 10;
-			} else if (maxJump < 100) {
-				this.chartYMax = Math.ceil(maxJump / 10) * 10;
-			} else {
-				this.chartYMax = Math.ceil(maxJump / 50) * 50;
-			}
+			if (maxJump <= 5) this.chartYMax = 5;
+			else if (maxJump <= 10) this.chartYMax = 10;
+			else if (maxJump < 100) this.chartYMax = Math.ceil(maxJump / 10) * 10;
+			else this.chartYMax = Math.ceil(maxJump / 50) * 50;
 		} else if (maxJump < this.chartYMax * 0.35) {
-			// Scale down more responsively for low ranges
 			let newMax;
-			if (maxJump <= 1) {
-				newMax = 1;
-			} else if (maxJump <= 5) {
-				newMax = 5;
-			} else if (maxJump <= 10) {
-				newMax = 10;
-			} else if (maxJump < 100) {
-				newMax = Math.ceil(maxJump / 10) * 10;
-			} else {
-				newMax = Math.ceil(maxJump / 50) * 50;
-			}
-			// Minimum now adaptive: if there was literally only 1 or 2 jumps, show fine granularity.
-			const minFloor = maxJump <= 2 ? 5 : 10; // allow small scale visibility
+			if (maxJump <= 1) newMax = 1;
+			else if (maxJump <= 5) newMax = 5;
+			else if (maxJump <= 10) newMax = 10;
+			else if (maxJump < 100) newMax = Math.ceil(maxJump / 10) * 10;
+			else newMax = Math.ceil(maxJump / 50) * 50;
+			const minFloor = maxJump <= 2 ? 5 : 10;
 			this.chartYMax = Math.max(minFloor, newMax);
 		}
-		const yAxisMax = this.chartYMax;
-		// --- End Dynamic Y-axis Logic ---
+		const yAxisMax = this.chartYMax || 1;
 
-		const displayData = jumps.slice(-360); // already at 10s spacing
 		let width = Math.floor(chartContainer.getBoundingClientRect().width);
 		if (!width || width < 200) width = 200;
 		if (width > 620) width = 620;
@@ -472,14 +445,9 @@ class PetitionTracker {
 		let svg = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">`;
 		svg += `<rect width="${width}" height="${height}" fill="#f8f9fa" rx="4"/>`;
 
-		// Generate dynamic Y-axis labels
-		const yLabelCount = 5;
-		const yLabels = Array.from(
-			{ length: yLabelCount },
-			(_, i) => (yAxisMax / (yLabelCount - 1)) * i
-		);
-
-		yLabels.forEach((label) => {
+		// Y axis grid & labels
+		for (let i = 0; i < 5; i++) {
+			const label = (yAxisMax / 4) * i;
 			const y = height - padding - (label / yAxisMax) * (height - padding * 2);
 			svg += `<text x="5" y="${y + 3}" font-size="9" fill="#666">${Math.round(
 				label
@@ -487,82 +455,71 @@ class PetitionTracker {
 			svg += `<line x1="25" y1="${y}" x2="${
 				width - padding
 			}" y2="${y}" stroke="#e9ecef" stroke-width="0.5"/>`;
-		});
+		}
 
 		if (displayData.length > 1) {
 			let path = "M";
-			displayData.forEach((point, index) => {
+			displayData.forEach((p, i) => {
 				const x =
-					padding + (index / (displayData.length - 1)) * (width - padding * 2);
+					padding + (i / (displayData.length - 1)) * (width - padding * 2);
 				const y =
 					height -
 					padding -
-					(Math.min(point.jump, yAxisMax) / yAxisMax) * (height - padding * 2);
-				path += `${index === 0 ? "" : "L"}${x},${y}`;
+					(Math.min(p.jump, yAxisMax) / yAxisMax) * (height - padding * 2);
+				path += `${i === 0 ? "" : "L"}${x},${y}`;
 			});
 			svg += `<path d="${path}" stroke="#4caf50" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
-
 			const zeroY = height - padding - (0 / yAxisMax) * (height - padding * 2);
-			// Plot every point, differentiate zero vs non-zero
-			displayData.forEach((point, index) => {
+			displayData.forEach((p, i) => {
 				const x =
-					padding + (index / (displayData.length - 1)) * (width - padding * 2);
-				const y =
-					height -
-					padding -
-					(Math.min(point.jump, yAxisMax) / yAxisMax) * (height - padding * 2);
-				if (point.jump > 0) {
-					const radius =
-						point.jump > yAxisMax / 2 ? 3 : point.jump > yAxisMax / 4 ? 2 : 1.5;
-					svg += `<circle cx="${x}" cy="${y}" r="${radius}" fill="#4caf50" opacity="0.85"/>`;
+					padding + (i / (displayData.length - 1)) * (width - padding * 2);
+				if (p.jump > 0) {
+					const r = p.jump > yAxisMax / 2 ? 3 : p.jump > yAxisMax / 4 ? 2 : 1.5;
+					svg += `<circle cx="${x}" cy="${
+						height -
+						padding -
+						(Math.min(p.jump, yAxisMax) / yAxisMax) * (height - padding * 2)
+					}" r="${r}" fill="#4caf50" opacity="0.85"/>`;
 				} else {
-					// zero jump: small hollow marker on zero line
 					svg += `<circle cx="${x}" cy="${zeroY}" r="1.4" fill="#fff" stroke="#4caf50" stroke-width="1" opacity="0.55"/>`;
 				}
 			});
 		}
 
-		const latestJump = displayData[displayData.length - 1];
-		if (latestJump) {
+		const latest = displayData[displayData.length - 1];
+		const peak = Math.max(...displayData.map((d) => d.jump), 0);
+		if (latest) {
 			const currentX = width - padding - 60;
 			const currentY = padding + 15;
-			const peakJump = Math.max(...displayData.map((p) => p.jump), 0);
-			const latestLabel = `Latest: +${latestJump.jump}`;
-			const peakLabel = `Peak: +${peakJump}`;
-			svg += `<text x="${currentX}" y="${currentY}" font-size="11" fill="#333" font-weight="bold">${latestLabel}</text>`;
+			svg += `<text x="${currentX}" y="${currentY}" font-size="11" fill="#333" font-weight="bold">Latest: +${latest.jump}</text>`;
 			svg += `<text x="${currentX}" y="${
 				currentY + 12
-			}" font-size="10" fill="#555">${peakLabel}</text>`;
+			}" font-size="10" fill="#555">Peak: +${peak}</text>`;
 		}
 
-		// --- Dual X-axis Labels (left elapsed span ago, right now) ---
-		if (displayData.length > 0) {
-			let agoLabel = "0s span";
-			if (displayData.length > 1) {
-				const spanMs =
-					displayData[displayData.length - 1].timestamp -
-					displayData[0].timestamp;
-				const secs = Math.max(0, Math.round(spanMs / 1000));
-				if (secs < 60) agoLabel = `${secs}s span`;
-				else {
-					const m = Math.floor(secs / 60);
-					const s = secs % 60;
-					agoLabel = s ? `${m}m ${s}s span` : `${m}m span`;
-				}
+		// Span labels
+		let spanLabel = "0s span";
+		if (displayData.length > 1) {
+			const spanMs =
+				displayData[displayData.length - 1].timestamp -
+				displayData[0].timestamp;
+			const secs = Math.max(0, Math.round(spanMs / 1000));
+			if (secs < 60) spanLabel = `${secs}s span`;
+			else {
+				const m = Math.floor(secs / 60);
+				const s = secs % 60;
+				spanLabel = s ? `${m}m ${s}s span` : `${m}m span`;
 			}
-			// left label
-			svg += `<text x="${padding}" y="${
-				height - 5
-			}" font-size="9" fill="#666">${agoLabel}</text>`;
-			// right label (now)
-			const rightLabelX = Math.max(padding + 40, width - padding - 30);
-			svg += `<text x="${rightLabelX}" y="${
-				height - 5
-			}" font-size="9" fill="#666">now</text>`;
 		}
-		// --- End Dual X-axis Labels ---
-		svg += "</svg>";
+		svg += `<text x="${padding}" y="${
+			height - 5
+		}" font-size="9" fill="#666">${spanLabel}</text>`;
+		const rightLabelX = Math.max(padding + 40, width - padding - 30);
+		svg += `<text x="${rightLabelX}" y="${
+			height - 5
+		}" font-size="9" fill="#666">now</text>`;
 
+		svg += "</svg>";
 		chartContainer.innerHTML = svg;
 	}
 
@@ -1043,21 +1000,21 @@ class PetitionTracker {
 	updateSignatureJump() {
 		const jumpElement = document.querySelector(".jump");
 		if (!jumpElement) return;
-
-		// Prefer already computed jump from chart render if available & fresh; else recompute.
-		let jumpVal = this._latestComputedJump;
-		if (jumpVal === undefined) {
-			const { jumps } = this._computeJumps();
-			jumpVal = jumps.length ? jumps[jumps.length - 1].jump : null;
-		}
-		if (jumpVal === null) {
+		let val = this._latestComputedJump;
+		if (val === undefined) {
+			// Chart hasn't rendered yet; treat as waiting
 			jumpElement.textContent = "Waiting for data...";
 			jumpElement.style.color = "#666";
 			return;
 		}
-		const colorClass = jumpVal > 0 ? "green" : "grey";
-		jumpElement.innerHTML = `Jump: <strong class="${colorClass}">+${jumpVal}</strong> in the past 10 seconds`;
-		jumpElement.style.color = jumpVal > 0 ? "#2e7d32" : "#555";
+		if (val === null) {
+			jumpElement.textContent = "Waiting for data...";
+			jumpElement.style.color = "#666";
+			return;
+		}
+		const colorClass = val > 0 ? "green" : "grey";
+		jumpElement.innerHTML = `Jump: <strong class="${colorClass}">+${val}</strong> in the past 10 seconds`;
+		jumpElement.style.color = val > 0 ? "#2e7d32" : "#555";
 	}
 
 	animateCounter(selector, targetValue, opts = {}) {
