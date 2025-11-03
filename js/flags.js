@@ -495,7 +495,8 @@
 						// Disable the default keyframe fall; we'll animate with top for a clear, full-height drop
 						wrapper.style.animation = "none";
 						// Respect constituency label toggle but ensure visibility is not hidden
-						const isConstituency = msgEl.getAttribute("data-constituency-flag") === "true";
+						const isConstituency =
+							msgEl.getAttribute("data-constituency-flag") === "true";
 						if (isConstituency && !showConstituencyLabels) {
 							msgEl.style.display = "none";
 						} else {
@@ -506,7 +507,10 @@
 						// Ensure we position horizontally first using the same logic as other modes
 						positionFlag(wrapper);
 						const startFall = () => {
-							const vh = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0);
+							const vh = Math.max(
+								document.documentElement.clientHeight || 0,
+								window.innerHeight || 0
+							);
 							const elH = wrapper.offsetHeight || 60;
 							// Small random bottom margin to create a row-like illusion
 							const gap = 4 + Math.floor(Math.random() * 10); // 4..13px
@@ -532,7 +536,8 @@
 							});
 							const onDone = (ev) => {
 								try {
-									if (ev && ev.propertyName && ev.propertyName !== "top") return;
+									if (ev && ev.propertyName && ev.propertyName !== "top")
+										return;
 									// Mark as settled for lighter styling and drop transition
 									wrapper.classList.add("snow-settled");
 									wrapper.style.transition = "";
@@ -600,7 +605,9 @@
 						wrapper.style.top = Math.round(topPx) + "px";
 						// Reset transform to ground position with a bit of tilt
 						const tilt = (Math.random() - 0.5) * 16;
-						wrapper.style.transform = `translateY(0px) rotate(${tilt.toFixed(1)}deg)`;
+						wrapper.style.transform = `translateY(0px) rotate(${tilt.toFixed(
+							1
+						)}deg)`;
 						// Mark as settled for lighter styling
 						wrapper.classList.add("snow-settled");
 					} catch (e) {

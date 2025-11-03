@@ -1187,6 +1187,7 @@ h4 {
 	height: 100%;
 	overflow: hidden;
 	z-index: 9999;
+	contain: layout paint; /* isolate layout/paint for smoother compositing */
 }
 
 .falling-flag {
@@ -1205,6 +1206,15 @@ h4 {
 	animation-duration: var(--flag-duration, 4000ms);
 	animation-delay: var(--flag-delay, 0ms);
 	z-index: 10000; /* sit above most page content */
+	will-change: transform, top, opacity;
+}
+.falling-flag.snow-settled .balloon-flag {
+	/* lighter shadow for large piles */
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+.falling-flag.snow-settled .balloon-flag::before,
+.falling-flag.snow-settled .balloon-flag::after {
+	display: none; /* drop glossy highlight and extra shadow to reduce paint cost */
 }
 
 /* March mode: disable fall animation and keep flags steady in formation */
@@ -1212,6 +1222,13 @@ h4 {
 	/* Disable falling animation; custom march animation applied inline */
 	animation: none;
 	will-change: transform, opacity;
+}
+
+/* Snow mode: settled flags stop animating and remain fully opaque at their stacked positions */
+.falling-flag.snow-settled {
+	animation: none !important;
+	opacity: 1 !important;
+	transform: translateY(0) rotate(0deg);
 }
 
 @keyframes marchMove {
