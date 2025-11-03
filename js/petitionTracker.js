@@ -32,10 +32,120 @@ class PetitionTracker {
 		this.initialRampPlanned = false; // track if first ramp custom duration is applied
 		this.table = null;
 		this.chartYMax = 100; // Initial Y-axis max for the history chart
+		this.govResponse = null; // government_response data when present
 
 		this.initialize();
 	}
 
+	// Update the compact meta bar under the main title
+	updateMetaBar() {
+		const metaState = document.getElementById("meta-state");
+		const metaUpdated = document.getElementById("meta-updated");
+		const metaClosed = document.getElementById("meta-closed");
+		const metaResponded = document.getElementById("meta-responded");
+		if (!metaState || !metaUpdated || !metaClosed) return;
+
+		const isClosed =
+			(this.petitionState || "").toLowerCase() === "closed" ||
+			!this.enableRealtime;
+		// State badge
+		metaState.textContent = isClosed ? "Closed" : "Open";
+		metaState.classList.toggle("state-open", !isClosed);
+		metaState.classList.toggle("state-closed", isClosed);
+
+		// Updated (open petitions)
+		if (!isClosed && this.lastUpdate) {
+			const ts = new Date(this.lastUpdate);
+			const timeEl = metaUpdated.querySelector("time");
+			if (timeEl) {
+				timeEl.setAttribute("datetime", ts.toISOString());
+				timeEl.textContent = ts.toLocaleString("en-GB", {
+					timeZone: "Europe/London",
+					year: "numeric",
+					month: "short",
+					day: "numeric",
+					hour: "2-digit",
+					minute: "2-digit",
+					second: "2-digit",
+					hour12: false,
+				});
+			}
+			metaUpdated.classList.remove("hidden");
+		} else {
+			metaUpdated.classList.add("hidden");
+		}
+
+		// Closed on (closed petitions)
+		if (isClosed && (this.closedAtRaw || this.lastUpdate)) {
+			const raw = this.closedAtRaw || this.lastUpdate;
+			const ts = new Date(raw);
+			const timeEl = metaClosed.querySelector("time");
+			if (timeEl) {
+				timeEl.setAttribute("datetime", ts.toISOString());
+				timeEl.textContent = ts.toLocaleDateString("en-GB", {
+					day: "numeric",
+					month: "long",
+					year: "numeric",
+				});
+			}
+			metaClosed.classList.remove("hidden");
+		} else {
+			metaClosed.classList.add("hidden");
+		}
+
+		// Government responded date (if present)
+		if (metaResponded) {
+			const resp = this.govResponse;
+			if (resp && (resp.responded_on || resp.updated_at || resp.created_at)) {
+				const raw = resp.responded_on || resp.updated_at || resp.created_at;
+				const ts = new Date(raw);
+				const timeEl = metaResponded.querySelector("time");
+				if (timeEl) {
+					timeEl.setAttribute("datetime", ts.toISOString());
+					timeEl.textContent = ts.toLocaleDateString("en-GB", {
+						day: "numeric",
+						month: "long",
+						year: "numeric",
+					});
+				}
+				metaResponded.classList.remove("hidden");
+			} else {
+				metaResponded.classList.add("hidden");
+			}
+		}
+	}
+
+	// Render banner with government response summary when available
+	updateGovernmentResponseDisplay() {
+		const container = document.getElementById("gov-response");
+		if (!container) return;
+		const resp = this.govResponse;
+		if (!resp || !resp.summary || !String(resp.summary).trim().length) {
+			container.classList.add("hidden");
+			container.innerHTML = "";
+			return;
+		}
+		const rawDate = resp.responded_on || resp.updated_at || resp.created_at;
+		let dateHtml = "";
+		if (rawDate) {
+			try {
+				const d = new Date(rawDate);
+				const pretty = d.toLocaleDateString("en-GB", {
+					day: "numeric",
+					month: "long",
+					year: "numeric",
+				});
+				dateHtml = `<time datetime="${d.toISOString()}">${pretty}</time>`;
+			} catch (_) {}
+		}
+		const summary = String(resp.summary).trim();
+		container.innerHTML = `
+			<span class="gov-response-title">Government response:</span>
+			${dateHtml ? `This response was given on ${dateHtml}. ` : ""}
+			<span class="gov-response-summary">${summary}</span>
+		`;
+		container.classList.remove("hidden");
+	}
 	// Use a namespaced storage key so each petition keeps its own history
 	storageKeyHistory() {
 		return this.petitionId
@@ -586,6 +696,8 @@ class PetitionTracker {
 			data.data.attributes.rejected_at ||
 			null;
 		this.title = data.data.attributes.action;
+		this.govResponse = data.data.attributes.government_response || null;
+		this.govResponse = data.data.attributes.government_response || null;
 		// Track petition state and toggle realtime/UI accordingly
 		try {
 			this.petitionState = (data.data.attributes.state || "").toLowerCase();
@@ -929,73 +1041,119 @@ class PetitionTracker {
 	}
 
 	updateTimestampDisplay() {
+		// Prefer new meta bar if present
+		const metaState = document.getElementById("meta-state");
+		const metaUpdated = document.getElementById("meta-updated");
+		const metaClosed = document.getElementById("meta-closed");
+		const metaResponded = document.getElementById("meta-responded");
+		const hasMeta = metaState && metaUpdated && metaClosed;
+		const isClosed = !this.enableRealtime;
+		if (hasMeta) {
+			try {
+				// State badge
+				metaState.textContent = isClosed ? "Closed" : "Open";
+				metaState.classList.toggle("state-open", !isClosed);
+				metaState.classList.toggle("state-closed", isClosed);
+				// Updated (open only)
+				if (!isClosed && this.lastUpdate) {
+					const ts = new Date(this.lastUpdate);
+					const timeEl = metaUpdated.querySelector("time");
+					if (timeEl) {
+						timeEl.setAttribute("datetime", ts.toISOString());
+						timeEl.textContent = ts.toLocaleString("en-GB", {
+							timeZone: "Europe/London",
+							year: "numeric",
+							month: "short",
+							day: "numeric",
+							hour: "2-digit",
+							minute: "2-digit",
+							second: "2-digit",
+							hour12: false,
+						});
+						const now = new Date();
+						const diffMs = now - ts;
+						const diffMinutes = Math.floor(diffMs / (1000 * 60));
+						let rel = "";
+						if (diffMinutes < 1) rel = "just now";
+						else if (diffMinutes < 60)
+							rel = `${diffMinutes} minute${diffMinutes !== 1 ? "s" : ""} ago`;
+						else {
+							const h = Math.floor(diffMs / (1000 * 60 * 60));
+							rel = `${h} hour${h !== 1 ? "s" : ""} ago`;
+						}
+						timeEl.setAttribute(
+							"title",
+							`Updated ${rel} - Exact time: ${ts.toLocaleString()}`
+						);
+					}
+					metaUpdated.classList.remove("hidden");
+				} else {
+					metaUpdated.classList.add("hidden");
+				}
+				// Closed (closed only)
+				if (isClosed && (this.closedAtRaw || this.lastUpdate)) {
+					const raw = this.closedAtRaw || this.lastUpdate;
+					const ts = new Date(raw);
+					const timeEl = metaClosed.querySelector("time");
+					if (timeEl) {
+						timeEl.setAttribute("datetime", ts.toISOString());
+						timeEl.textContent = ts.toLocaleDateString("en-GB", {
+							day: "numeric",
+							month: "long",
+							year: "numeric",
+						});
+						timeEl.setAttribute("title", `Closed on ${ts.toLocaleString()}`);
+					}
+					metaClosed.classList.remove("hidden");
+				} else {
+					metaClosed.classList.add("hidden");
+				}
+				// Government responded date
+				if (metaResponded) {
+					const resp = this.govResponse;
+					if (
+						resp &&
+						(resp.responded_on || resp.updated_at || resp.created_at)
+					) {
+						const raw = resp.responded_on || resp.updated_at || resp.created_at;
+						const ts = new Date(raw);
+						const timeEl = metaResponded.querySelector("time");
+						if (timeEl) {
+							timeEl.setAttribute("datetime", ts.toISOString());
+							timeEl.textContent = ts.toLocaleDateString("en-GB", {
+								day: "numeric",
+								month: "long",
+								year: "numeric",
+							});
+							timeEl.setAttribute(
+								"title",
+								`Government responded on ${ts.toLocaleString()}`
+							);
+						}
+						metaResponded.classList.remove("hidden");
+					} else {
+						metaResponded.classList.add("hidden");
+					}
+				}
+			} catch (e) {}
+			return;
+		}
+
+		// Fallback to legacy small element (older markup)
 		const smallEl = document.querySelector(".top-cat small");
 		if (!smallEl) return;
-
-		// Determine which timestamp to show
-		const isClosed = !this.enableRealtime;
 		const sourceRaw = isClosed
 			? this.closedAtRaw || this.lastUpdate
 			: this.lastUpdate;
 		if (!sourceRaw) return;
-
 		try {
 			const timestamp = new Date(sourceRaw);
-			const ukOptions = {
-				timeZone: "Europe/London",
-				year: "numeric",
-				month: "short",
-				day: "numeric",
-				hour: "2-digit",
-				minute: "2-digit",
-				second: "2-digit",
-				hour12: false,
-			};
-			const ukFormattedTime = timestamp.toLocaleString("en-GB", ukOptions);
-
-			// Update the small element label and time content
-			const label = isClosed ? "Closed on" : "Updated at";
-			smallEl.innerHTML = `(${label}: <time class="updatedAt" datetime="${timestamp.toISOString()}">${ukFormattedTime}</time>)`;
-
-			// Set helpful title tooltip
-			const timeElement = smallEl.querySelector(".updatedAt");
-			if (timeElement) {
-				if (isClosed) {
-					timeElement.setAttribute(
-						"title",
-						`Closed on ${timestamp.toLocaleString()}`
-					);
-				} else {
-					const now = new Date();
-					const diffMs = now - timestamp;
-					const diffMinutes = Math.floor(diffMs / (1000 * 60));
-					let relativeText;
-					if (diffMinutes < 1) {
-						relativeText = "just now";
-					} else if (diffMinutes < 60) {
-						relativeText = `${diffMinutes} minute${
-							diffMinutes !== 1 ? "s" : ""
-						}`;
-						relativeText += " ago";
-					} else {
-						const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-						relativeText = `${diffHours} hour${
-							diffHours !== 1 ? "s" : ""
-						} ago`;
-					}
-					timeElement.setAttribute(
-						"title",
-						`Updated ${relativeText} - Exact time: ${timestamp.toLocaleString()}`
-					);
-				}
-			}
-		} catch (error) {
-			console.warn("Failed to parse timestamp:", sourceRaw, error);
-			// Fallback: simple text without formatting
-			smallEl.textContent = isClosed
-				? `(Closed on: ${sourceRaw})`
-				: `(Updated at: ${sourceRaw})`;
-		}
+			smallEl.innerHTML = `(${
+				isClosed ? "Closed on" : "Updated at"
+			}: <time class="updatedAt" datetime="${timestamp.toISOString()}">${timestamp.toLocaleString(
+				"en-GB"
+			)}</time>)`;
+		} catch (e) {}
 	}
 
 	updateUI() {
@@ -1003,7 +1161,10 @@ class PetitionTracker {
 		const titleHeader = document.querySelector(".titleHeader");
 		if (titleHeader) titleHeader.textContent = this.title;
 
+		// Update meta bar (state + dates) and any response summary banner
 		this.updateTimestampDisplay();
+		this.updateGovernmentResponseDisplay &&
+			this.updateGovernmentResponseDisplay();
 
 		// Compute an animation duration that ends shortly before the next update
 		let rampDuration = 5000; // fallback
@@ -1058,6 +1219,21 @@ class PetitionTracker {
 		);
 
 		this.updateSignatureJump();
+	}
+
+	// Show only the short government response summary (no date/label; dates are in the meta bar)
+	updateGovernmentResponseDisplay() {
+		const container = document.getElementById("gov-response");
+		if (!container) return;
+		const resp = this.govResponse;
+		const summary = resp && resp.summary ? String(resp.summary).trim() : "";
+		if (!summary) {
+			container.classList.add("hidden");
+			container.innerHTML = "";
+			return;
+		}
+		container.textContent = summary;
+		container.classList.remove("hidden");
 	}
 
 	updateRegionDisplay(countSelector, count, percentSelector, percentage) {

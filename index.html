@@ -57,12 +57,34 @@
 	<body id="petition">
 		<div class="flex-container container">
 			<header>
-				<h1 class="top-cat">
-					LIVE UK PETITION DATA <br />
-					<small
-						>(Updated at: <time class="updatedAt" datetime=""></time>)</small
-					>
-				</h1>
+				<h1 class="top-cat">LIVE UK PETITION DATA</h1>
+
+				<!-- Meta bar: state and key dates -->
+				<div class="petition-meta" role="status" aria-live="polite">
+					<span id="meta-state" class="badge state-badge state-open">Open</span>
+					<span id="meta-updated" class="meta-item">
+						<strong>Updated:</strong>
+						<time datetime=""></time>
+					</span>
+					<span id="meta-closed" class="meta-item hidden">
+						<strong>Closed:</strong>
+						<time datetime=""></time>
+					</span>
+					<span id="meta-responded" class="meta-item hidden">
+						<strong>Govt response:</strong>
+						<time datetime=""></time>
+					</span>
+				</div>
+
+				<!-- Government response summary (shown when available) -->
+				<div
+					id="gov-response"
+					class="gov-response hidden"
+					role="note"
+					aria-live="polite"
+				>
+					<!-- Filled by petitionTracker.js when government_response.summary exists -->
+				</div>
 
 				<!-- Petition controls: half width dropdown + half width state filter -->
 				<div class="petition-controls" aria-label="Petition selection controls">

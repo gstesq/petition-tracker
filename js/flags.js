@@ -877,8 +877,7 @@
 			const f = document.getElementById("flag-toggle");
 			if (f) f.checked = enabled;
 			const block = document.getElementById("flag-toggle-block");
-			if (block)
-				block.setAttribute("aria-pressed", enabled ? "true" : "false");
+			if (block) block.setAttribute("aria-pressed", enabled ? "true" : "false");
 			const stateEl = document.getElementById("flag-toggle-state");
 			if (stateEl) stateEl.textContent = enabled ? "On" : "Off";
 			updateDependentVisibility();
