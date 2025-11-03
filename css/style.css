@@ -94,6 +94,12 @@
 	opacity: 0.9;
 }
 
+/* Closed-mode: hide live/realtime UI when viewing closed petitions */
+body.closed-mode .history-chart-container,
+body.closed-mode .status-indicator {
+	display: none !important;
+}
+
 /* Petition controls layout: dropdown (left) + filter (right) */
 .petition-controls {
 	display: flex;
@@ -126,6 +132,25 @@
 	border: 1px solid #c9c9c9;
 	border-radius: 4px;
 	background: #fff;
+}
+
+.petition-controls .picker-row {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	gap: 0.4rem;
+	align-items: center;
+}
+.petition-controls .petition-go {
+	padding: 6px 10px;
+	font-size: 0.9rem;
+	border: 1px solid #c9c9c9;
+	border-radius: 4px;
+	background: #f7f7f7;
+	cursor: pointer;
+}
+.petition-controls .petition-go:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
 }
 
 /* Segmented radio control for state filter */

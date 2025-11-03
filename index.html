@@ -68,19 +68,53 @@
 				<div class="petition-controls" aria-label="Petition selection controls">
 					<div class="control control-left">
 						<label for="petition-select" class="control-label">Petition:</label>
-						<select id="petition-select" aria-label="Select a petition">
-							<option value="" disabled selected>Loading…</option>
-						</select>
+						<div class="picker-row">
+							<select id="petition-select" aria-label="Select a petition">
+								<option value="" disabled selected>Loading…</option>
+							</select>
+							<button
+								id="petition-go-btn"
+								type="button"
+								class="petition-go"
+								aria-label="Load selected petition"
+							>
+								Go
+							</button>
+						</div>
 					</div>
-					<div class="control control-right" role="group" aria-label="Filter petitions by state">
+					<div
+						class="control control-right"
+						role="group"
+						aria-label="Filter petitions by state"
+					>
 						<div class="segmented-control" id="petition-state-group">
-							<input type="radio" id="filter-open" name="petition-state" value="open" class="visually-hidden" />
+							<input
+								type="radio"
+								id="filter-open"
+								name="petition-state"
+								value="open"
+								class="visually-hidden"
+							/>
 							<label for="filter-open" title="Open petitions only">Open</label>
 
-							<input type="radio" id="filter-closed" name="petition-state" value="closed" class="visually-hidden" />
-							<label for="filter-closed" title="Closed petitions only">Closed</label>
+							<input
+								type="radio"
+								id="filter-closed"
+								name="petition-state"
+								value="closed"
+								class="visually-hidden"
+							/>
+							<label for="filter-closed" title="Closed petitions only"
+								>Closed</label
+							>
 
-							<input type="radio" id="filter-both" name="petition-state" value="both" class="visually-hidden" />
+							<input
+								type="radio"
+								id="filter-both"
+								name="petition-state"
+								value="both"
+								class="visually-hidden"
+							/>
 							<label for="filter-both" title="Open and closed">Both</label>
 						</div>
 					</div>

@@ -2,8 +2,9 @@
 // Modernized and refactored for better maintainability
 
 class PetitionTracker {
-	constructor(petitionId = 730194) {
-		this.petitionId = petitionId;
+	constructor(petitionId) {
+		this.petitionId = Number.isFinite(petitionId) ? petitionId : null;
+		this.enableRealtime = true; // allows disabling live features when viewing closed petitions
 		this.tableData = [];
 		this.tableDataIndy = [];
 		this.signatureHistory = [];
@@ -37,17 +38,32 @@ class PetitionTracker {
 
 	// Use a namespaced storage key so each petition keeps its own history
 	storageKeyHistory() {
-		return `petitionSignatureHistory:${this.petitionId}`;
+		return this.petitionId
+			? `petitionSignatureHistory:${this.petitionId}`
+			: null;
 	}
 
 	initialize() {
 		console.log("Petition Tracker initialized");
-		this.loadSignatureHistory();
-		this.setupLinks();
 		this.setupResetButton();
-		this.setupChartControls(); // Add this call
+		this.setupChartControls();
 		this.setupResponsiveChart();
 		this.initializeTable();
+
+		// If no petition selected, keep UI idle and prompt user to pick one
+		if (!this.petitionId) {
+			this.enableRealtime = false;
+			this.setupLinks(); // set inert links
+			const jump = document.querySelector(".jump");
+			if (jump) {
+				jump.textContent = "Select a petition to begin";
+				jump.style.color = "#555";
+			}
+			return;
+		}
+
+		this.loadSignatureHistory();
+		this.setupLinks();
 		this.updateHistoryChart(); // Show chart with existing history
 		this.fetchData();
 		this.startAutoUpdate();
@@ -96,7 +112,8 @@ class PetitionTracker {
 
 		// 3. Clear local storage
 		try {
-			localStorage.removeItem(this.storageKeyHistory());
+			const key = this.storageKeyHistory();
+			if (key) localStorage.removeItem(key);
 			localStorage.removeItem("chartMode");
 		} catch (error) {
 			console.warn("Failed to clear localStorage:", error);
@@ -160,7 +177,9 @@ class PetitionTracker {
 
 	loadSignatureHistory() {
 		try {
-			const stored = localStorage.getItem(this.storageKeyHistory());
+			const key = this.storageKeyHistory();
+			if (!key) return;
+			const stored = localStorage.getItem(key);
 			if (stored) {
 				this.signatureHistoryData = JSON.parse(stored);
 				const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
@@ -562,6 +581,16 @@ class PetitionTracker {
 		this.totalSignatures = data.data.attributes.signature_count;
 		this.lastUpdate = data.data.attributes.updated_at;
 		this.title = data.data.attributes.action;
+		// Track petition state and toggle realtime/UI accordingly
+		try {
+			this.petitionState = (data.data.attributes.state || "").toLowerCase();
+			const enable = this.petitionState !== "closed";
+			this.setRealtimeEnabled(enable);
+			if (document && document.body) {
+				if (!enable) document.body.classList.add("closed-mode");
+				else document.body.classList.remove("closed-mode");
+			}
+		} catch (_) {}
 
 		this.calculateRegionData();
 		this.updateSignatureHistory();
@@ -835,6 +864,7 @@ class PetitionTracker {
 	}
 
 	updateJumpElement(regionKey, jumpSize) {
+		if (!this.enableRealtime) return; // suppress indicators when realtime disabled
 		const elementId = this.getRegionElementId(regionKey);
 		if (!elementId) return;
 		const jumpElement = document.getElementById(elementId);
@@ -1161,10 +1191,33 @@ class PetitionTracker {
 		if (this.updateIntervalId) {
 			clearInterval(this.updateIntervalId);
 		}
+		if (!this.enableRealtime) return; // do not poll when realtime disabled
 		this.updateIntervalId = setInterval(
 			() => this.fetchData(),
 			this.updateInterval
 		);
+	}
+
+	// Toggle realtime features (polling, jump indicators, flags)
+	setRealtimeEnabled(flag) {
+		const next = !!flag;
+		if (this.enableRealtime === next) return;
+		this.enableRealtime = next;
+		if (!this.enableRealtime) {
+			if (this.updateIntervalId) {
+				clearInterval(this.updateIntervalId);
+				this.updateIntervalId = null;
+			}
+			const jumpElement = document.querySelector(".jump");
+			if (jumpElement) {
+				jumpElement.textContent = "Closed — no live updates";
+				jumpElement.style.color = "#555";
+			}
+		} else {
+			// Re-enable: start polling and fetch once immediately
+			this.startAutoUpdate();
+			this.fetchData();
+		}
 	}
 
 	findByAttribute(array, attribute, value) {
@@ -1197,6 +1250,7 @@ class PetitionTracker {
 	}
 
 	showUpdatingIndicator() {
+		if (!this.enableRealtime) return; // no updating banner in closed mode
 		const jumpElement = document.querySelector(".jump");
 		if (jumpElement) {
 			jumpElement.textContent = "Updating...";
@@ -1205,7 +1259,7 @@ class PetitionTracker {
 	}
 
 	hideUpdatingIndicator() {
-		this.updateSignatureJump();
+		if (this.enableRealtime) this.updateSignatureJump();
 	}
 }
 
