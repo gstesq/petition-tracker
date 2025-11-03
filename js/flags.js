@@ -16,10 +16,13 @@
 	let animationEnabled = true;
 	let showConstituencyLabels = true;
 	let animationMode = "drop"; // "drop" | "stream" | "march"
-    let oneOffMarchActive = false; // suppress routine spawns during a one-off march
+	let oneOffMarchActive = false; // suppress routine spawns during a one-off march
 	const STORAGE_KEY_ANIMATION = "flagsAnimation";
 	const STORAGE_KEY_LABELS = "flagsLabels";
 	const STORAGE_KEY_MODE = "flagsMode";
+
+	// Track any deferred spawn timeouts so we can cancel them on toggle-off
+	let _deferredSpawnTimers = [];
 
 	function updateDependentVisibility() {
 		const flagCheckbox = document.getElementById("flag-toggle");
@@ -61,6 +64,8 @@
 		try {
 			// Stop march scheduler
 			MARCH_FORMATION.schedulerRunning = false;
+			// Reset one-off guard so normal spawns aren't suppressed after a hard stop
+			oneOffMarchActive = false;
 			// Clear queued rows
 			MARCH_FORMATION.rows.forEach((row) => {
 				row.queue.length = 0;
@@ -87,6 +92,11 @@
 			}
 			// Clear any deferred spawns
 			_hiddenAccum = [];
+			// Cancel any scheduled deferred spawn timers
+			try {
+				_deferredSpawnTimers.forEach((tid) => clearTimeout(tid));
+			} catch (e) {}
+			_deferredSpawnTimers = [];
 		} catch (e) {
 			console.warn("[Flags] stopAllFlagAnimations failed", e);
 		}
@@ -190,11 +200,12 @@
 			const delay = Math.round(
 				(i / total) * windowMs + (Math.random() - 0.5) * 200
 			);
-			setTimeout(() => {
+			const tid = setTimeout(() => {
 				try {
 					spawnFlags(items[i].flagUrl, 1, items[i].label);
 				} catch (e) {}
 			}, Math.max(0, delay));
+			_deferredSpawnTimers.push(tid);
 		}
 	}
 
@@ -458,10 +469,13 @@
 						MARCH_FORMATION.startedCount += 1;
 						const remaining = Math.max(
 							0,
-							(MARCH_FORMATION.totalQueued || 0) - (MARCH_FORMATION.startedCount || 0)
+							(MARCH_FORMATION.totalQueued || 0) -
+								(MARCH_FORMATION.startedCount || 0)
 						);
 						window.dispatchEvent(
-							new CustomEvent("petitionFlags:marchProgress", { detail: { remaining } })
+							new CustomEvent("petitionFlags:marchProgress", {
+								detail: { remaining },
+							})
 						);
 					} catch (e) {}
 					const distanceNeeded = rowObj.lastWidth + w + GAP_EXTRA;
@@ -525,9 +539,10 @@
 			const subSpan = document.createElement("span");
 			subSpan.className = "balloon-subcount";
 			try {
-				subSpan.textContent = (typeof rec.value === "number"
-					? rec.value
-					: parseInt(rec.value, 10) || 0
+				subSpan.textContent = (
+					typeof rec.value === "number"
+						? rec.value
+						: parseInt(rec.value, 10) || 0
 				).toLocaleString("en-GB");
 			} catch (e) {
 				subSpan.textContent = String(rec.value || "");
@@ -688,7 +703,9 @@
 			// Notify listeners that march run has started
 			try {
 				window.dispatchEvent(
-					new CustomEvent("petitionFlags:marchStart", { detail: { total: seq.length } })
+					new CustomEvent("petitionFlags:marchStart", {
+						detail: { total: seq.length },
+					})
 				);
 			} catch (e) {}
 			startMarchScheduler();
@@ -704,7 +721,9 @@
 						oneOffMarchActive = false;
 						try {
 							window.dispatchEvent(
-								new CustomEvent("petitionFlags:marchComplete", { detail: { total: seq.length } })
+								new CustomEvent("petitionFlags:marchComplete", {
+									detail: { total: seq.length },
+								})
 							);
 						} catch (e) {}
 					}, 12000);
@@ -845,6 +864,26 @@
 	}
 
 	window.spawnFlags = spawnFlags;
+	// Optional: expose a simple API to toggle animations programmatically
+	window.setFlagsEnabled = function (enabled) {
+		enabled = !!enabled;
+		animationEnabled = enabled;
+		try {
+			localStorage.setItem(STORAGE_KEY_ANIMATION, enabled);
+		} catch (e) {}
+		if (!enabled) stopAllFlagAnimations();
+		// reflect in UI if present
+		try {
+			const f = document.getElementById("flag-toggle");
+			if (f) f.checked = enabled;
+			const block = document.getElementById("flag-toggle-block");
+			if (block)
+				block.setAttribute("aria-pressed", enabled ? "true" : "false");
+			const stateEl = document.getElementById("flag-toggle-state");
+			if (stateEl) stateEl.textContent = enabled ? "On" : "Off";
+			updateDependentVisibility();
+		} catch (e) {}
+	};
 	window._petitionFlags = {
 		spawnFlags,
 		applyToggleToExistingFlags,
@@ -906,20 +945,20 @@
 		if (marchBtn) {
 			const updateDisabled = () => {
 				const t = window.petitionTracker;
-					const ok =
-						t &&
-						t.petitionId &&
-						Array.isArray(t.tableData) &&
-						t.tableData.length &&
-						Array.isArray(t.tableDataIndy) &&
-						t.tableDataIndy.length &&
-						animationEnabled;
-					marchBtn.disabled = !ok;
-					marchBtn.title = ok
-						? "Run a one-off proportional march"
-						: (!animationEnabled
-								? "Enable Falling flags to run animations"
-								: "Select and load a petition first to run the march");
+				const ok =
+					t &&
+					t.petitionId &&
+					Array.isArray(t.tableData) &&
+					t.tableData.length &&
+					Array.isArray(t.tableDataIndy) &&
+					t.tableDataIndy.length &&
+					animationEnabled;
+				marchBtn.disabled = !ok;
+				marchBtn.title = ok
+					? "Run a one-off proportional march"
+					: !animationEnabled
+					? "Enable Falling flags to run animations"
+					: "Select and load a petition first to run the march";
 			};
 			updateDisabled();
 			marchBtn.addEventListener("click", () => {
@@ -928,49 +967,53 @@
 					console.warn("[Flags] Unable to run proportional march (no data).");
 				}
 			});
-				// Feedback while running
-				const setRunningState = (running, total) => {
-					try {
-						marchBtn.setAttribute("aria-busy", running ? "true" : "false");
-						const titleEl = marchBtn.querySelector(".block-title");
-						const descEl = marchBtn.querySelector(".block-desc");
-						if (running) {
-							marchBtn.disabled = true;
-							if (titleEl) titleEl.textContent = "Running march…";
-							if (descEl) {
-								descEl.setAttribute("aria-live", "polite");
-								descEl.textContent = total && total > 0
+			// Feedback while running
+			const setRunningState = (running, total) => {
+				try {
+					marchBtn.setAttribute("aria-busy", running ? "true" : "false");
+					const titleEl = marchBtn.querySelector(".block-title");
+					const descEl = marchBtn.querySelector(".block-desc");
+					if (running) {
+						marchBtn.disabled = true;
+						if (titleEl) titleEl.textContent = "Running march…";
+						if (descEl) {
+							descEl.setAttribute("aria-live", "polite");
+							descEl.textContent =
+								total && total > 0
 									? `One‑off march in progress (${total} flags queued)…`
 									: "One‑off march in progress…";
-							}
-						} else {
-							if (titleEl) titleEl.textContent = "Constituency & Non‑UK March";
-							if (descEl) {
-								descEl.textContent =
-									"One‑off march of flags: one per UK constituency and one per country outside the UK. Flag size reflects total signatures.";
-							}
-							updateDisabled();
 						}
-					} catch (e) {}
-				};
-				window.addEventListener("petitionFlags:marchStart", (ev) => {
-					setRunningState(true, ev && ev.detail && ev.detail.total);
-				});
-				window.addEventListener("petitionFlags:marchProgress", (ev) => {
-					try {
-						const descEl = marchBtn.querySelector(".block-desc");
-						if (!descEl) return;
-						const remaining = (ev && ev.detail && typeof ev.detail.remaining === "number")
+					} else {
+						if (titleEl) titleEl.textContent = "Constituency & Non‑UK March";
+						if (descEl) {
+							descEl.textContent =
+								"One‑off march of flags: one per UK constituency and one per country outside the UK. Flag size reflects total signatures.";
+						}
+						updateDisabled();
+					}
+				} catch (e) {}
+			};
+			window.addEventListener("petitionFlags:marchStart", (ev) => {
+				setRunningState(true, ev && ev.detail && ev.detail.total);
+			});
+			window.addEventListener("petitionFlags:marchProgress", (ev) => {
+				try {
+					const descEl = marchBtn.querySelector(".block-desc");
+					if (!descEl) return;
+					const remaining =
+						ev && ev.detail && typeof ev.detail.remaining === "number"
 							? ev.detail.remaining
 							: undefined;
-						if (typeof remaining === "number") {
-							descEl.textContent = `March in progress – ${remaining.toLocaleString("en-GB")} remaining…`;
-						}
-					} catch (e) {}
-				});
-				window.addEventListener("petitionFlags:marchComplete", () => {
-					setRunningState(false);
-				});
+					if (typeof remaining === "number") {
+						descEl.textContent = `March in progress – ${remaining.toLocaleString(
+							"en-GB"
+						)} remaining…`;
+					}
+				} catch (e) {}
+			});
+			window.addEventListener("petitionFlags:marchComplete", () => {
+				setRunningState(false);
+			});
 			// Also re-check after a short delay in case tracker initializes later
 			setTimeout(updateDisabled, 2000);
 		}

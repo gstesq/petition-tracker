@@ -580,6 +580,11 @@ class PetitionTracker {
 		this.tableDataIndy = data.data.attributes.signatures_by_constituency;
 		this.totalSignatures = data.data.attributes.signature_count;
 		this.lastUpdate = data.data.attributes.updated_at;
+		// Capture closed date (or equivalent) if available
+		this.closedAtRaw =
+			data.data.attributes.closed_at ||
+			data.data.attributes.rejected_at ||
+			null;
 		this.title = data.data.attributes.action;
 		// Track petition state and toggle realtime/UI accordingly
 		try {
@@ -923,6 +928,76 @@ class PetitionTracker {
 		}, duration);
 	}
 
+	updateTimestampDisplay() {
+		const smallEl = document.querySelector(".top-cat small");
+		if (!smallEl) return;
+
+		// Determine which timestamp to show
+		const isClosed = !this.enableRealtime;
+		const sourceRaw = isClosed
+			? this.closedAtRaw || this.lastUpdate
+			: this.lastUpdate;
+		if (!sourceRaw) return;
+
+		try {
+			const timestamp = new Date(sourceRaw);
+			const ukOptions = {
+				timeZone: "Europe/London",
+				year: "numeric",
+				month: "short",
+				day: "numeric",
+				hour: "2-digit",
+				minute: "2-digit",
+				second: "2-digit",
+				hour12: false,
+			};
+			const ukFormattedTime = timestamp.toLocaleString("en-GB", ukOptions);
+
+			// Update the small element label and time content
+			const label = isClosed ? "Closed on" : "Updated at";
+			smallEl.innerHTML = `(${label}: <time class="updatedAt" datetime="${timestamp.toISOString()}">${ukFormattedTime}</time>)`;
+
+			// Set helpful title tooltip
+			const timeElement = smallEl.querySelector(".updatedAt");
+			if (timeElement) {
+				if (isClosed) {
+					timeElement.setAttribute(
+						"title",
+						`Closed on ${timestamp.toLocaleString()}`
+					);
+				} else {
+					const now = new Date();
+					const diffMs = now - timestamp;
+					const diffMinutes = Math.floor(diffMs / (1000 * 60));
+					let relativeText;
+					if (diffMinutes < 1) {
+						relativeText = "just now";
+					} else if (diffMinutes < 60) {
+						relativeText = `${diffMinutes} minute${
+							diffMinutes !== 1 ? "s" : ""
+						}`;
+						relativeText += " ago";
+					} else {
+						const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+						relativeText = `${diffHours} hour${
+							diffHours !== 1 ? "s" : ""
+						} ago`;
+					}
+					timeElement.setAttribute(
+						"title",
+						`Updated ${relativeText} - Exact time: ${timestamp.toLocaleString()}`
+					);
+				}
+			}
+		} catch (error) {
+			console.warn("Failed to parse timestamp:", sourceRaw, error);
+			// Fallback: simple text without formatting
+			smallEl.textContent = isClosed
+				? `(Closed on: ${sourceRaw})`
+				: `(Updated at: ${sourceRaw})`;
+		}
+	}
+
 	updateUI() {
 		document.title = this.title;
 		const titleHeader = document.querySelector(".titleHeader");
@@ -930,7 +1005,7 @@ class PetitionTracker {
 
 		this.updateTimestampDisplay();
 
-		// Compute an animation duration that ends shortly (e.g., 600ms) before the next update
+		// Compute an animation duration that ends shortly before the next update
 		let rampDuration = 5000; // fallback
 		if (!this.initialRampPlanned) {
 			// First load: ramp quickly from 0 to current total over ~4 seconds
@@ -983,55 +1058,6 @@ class PetitionTracker {
 		);
 
 		this.updateSignatureJump();
-	}
-
-	updateTimestampDisplay() {
-		const timeElement = document.querySelector(".updatedAt");
-		if (!timeElement || !this.lastUpdate) return;
-
-		try {
-			const timestamp = new Date(this.lastUpdate);
-			timeElement.setAttribute("datetime", timestamp.toISOString());
-
-			const ukOptions = {
-				timeZone: "Europe/London",
-				year: "numeric",
-				month: "short",
-				day: "numeric",
-				hour: "2-digit",
-				minute: "2-digit",
-				second: "2-digit",
-				hour12: false,
-			};
-			const ukFormattedTime = timestamp.toLocaleString("en-GB", ukOptions);
-			timeElement.textContent = ukFormattedTime;
-
-			const now = new Date();
-			const diffMs = now - timestamp;
-			const diffMinutes = Math.floor(diffMs / (1000 * 60));
-
-			let relativeText;
-			if (diffMinutes < 1) {
-				relativeText = "just now";
-			} else if (diffMinutes < 60) {
-				relativeText = `${diffMinutes} minute${
-					diffMinutes !== 1 ? "s" : ""
-				} ago`;
-			} else {
-				const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-				relativeText = `${diffHours} hour${diffHours !== 1 ? "s" : ""} ago`;
-			}
-			timeElement.setAttribute(
-				"title",
-				`Updated ${relativeText} - Exact time: ${timestamp.toLocaleString()}`
-			);
-		} catch (error) {
-			console.warn("Failed to parse timestamp:", this.lastUpdate, error);
-			if (timeElement) {
-				timeElement.textContent = this.lastUpdate;
-				timeElement.setAttribute("datetime", this.lastUpdate);
-			}
-		}
 	}
 
 	updateRegionDisplay(countSelector, count, percentSelector, percentage) {
@@ -1213,10 +1239,23 @@ class PetitionTracker {
 				jumpElement.textContent = "Closed — no live updates";
 				jumpElement.style.color = "#555";
 			}
+
+			// Update CTA for closed petitions
+			const signLink = document.querySelector("a.sign.button1");
+			if (signLink) {
+				signLink.textContent = "VIEW RESULT";
+				signLink.setAttribute("aria-label", "View result");
+			}
 		} else {
 			// Re-enable: start polling and fetch once immediately
 			this.startAutoUpdate();
 			this.fetchData();
+			// Restore CTA for open petitions
+			const signLink = document.querySelector("a.sign.button1");
+			if (signLink) {
+				signLink.textContent = "SIGN THIS PETITION";
+				signLink.setAttribute("aria-label", "Sign this petition");
+			}
 		}
 	}
 

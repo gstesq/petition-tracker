@@ -100,6 +100,20 @@ body.closed-mode .status-indicator {
 	display: none !important;
 }
 
+/* Closed-mode: change CTA to red and relabel via JS */
+body.closed-mode a.sign.button1 {
+	background-color: #c62828; /* red */
+	border-color: #8e0000;
+	color: #fff;
+}
+body.closed-mode a.sign.button1:hover {
+	background-color: #b71c1c;
+	color: #fff;
+}
+body.closed-mode .button1:focus {
+	outline-color: #c62828;
+}
+
 /* Petition controls layout: dropdown (left) + filter (right) */
 .petition-controls {
 	display: flex;
