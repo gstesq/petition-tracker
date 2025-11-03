@@ -35,6 +35,11 @@ class PetitionTracker {
 		this.initialize();
 	}
 
+	// Use a namespaced storage key so each petition keeps its own history
+	storageKeyHistory() {
+		return `petitionSignatureHistory:${this.petitionId}`;
+	}
+
 	initialize() {
 		console.log("Petition Tracker initialized");
 		this.loadSignatureHistory();
@@ -91,7 +96,7 @@ class PetitionTracker {
 
 		// 3. Clear local storage
 		try {
-			localStorage.removeItem("petitionSignatureHistory");
+			localStorage.removeItem(this.storageKeyHistory());
 			localStorage.removeItem("chartMode");
 		} catch (error) {
 			console.warn("Failed to clear localStorage:", error);
@@ -155,7 +160,7 @@ class PetitionTracker {
 
 	loadSignatureHistory() {
 		try {
-			const stored = localStorage.getItem("petitionSignatureHistory");
+			const stored = localStorage.getItem(this.storageKeyHistory());
 			if (stored) {
 				this.signatureHistoryData = JSON.parse(stored);
 				const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
@@ -175,7 +180,7 @@ class PetitionTracker {
 	saveSignatureHistory() {
 		try {
 			localStorage.setItem(
-				"petitionSignatureHistory",
+				this.storageKeyHistory(),
 				JSON.stringify(this.signatureHistoryData)
 			);
 		} catch (error) {
@@ -898,15 +903,8 @@ class PetitionTracker {
 		// Compute an animation duration that ends shortly (e.g., 600ms) before the next update
 		let rampDuration = 5000; // fallback
 		if (!this.initialRampPlanned) {
-			// We haven't yet flagged post-first-fetch; assume first fetch just ran and next scheduled update is in updateInterval
-			// Keep a buffer so final number settles before new jump animations (flags/spawns) land.
-			const bufferBeforeNext = 600; // ms pause before next polling cycle
-			const candidate = this.updateInterval - bufferBeforeNext;
-			// Clamp to sensible bounds (min 1500ms, max updateInterval-200ms)
-			rampDuration = Math.max(
-				1500,
-				Math.min(candidate, this.updateInterval - 200)
-			);
+			// First load: ramp quickly from 0 to current total over ~4 seconds
+			rampDuration = 4000;
 		} else {
 			// Subsequent UI updates: shorter ramp for responsiveness
 			rampDuration = 3500;
@@ -1212,7 +1210,13 @@ class PetitionTracker {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-	const tracker = new PetitionTracker();
+	// Read petition id from URL (?petition=ID or ?id=ID); fallback to default
+	const qs = new URLSearchParams(window.location.search);
+	const idParam = qs.get("petition") || qs.get("id");
+	const initialId = idParam ? parseInt(idParam, 10) : undefined;
+	const tracker = new PetitionTracker(
+		Number.isFinite(initialId) ? initialId : undefined
+	);
 	window.petitionTracker = tracker;
 
 	window.showJumpCount = function (id, jumpSize) {

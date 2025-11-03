@@ -94,6 +94,82 @@
 	opacity: 0.9;
 }
 
+/* Petition controls layout: dropdown (left) + filter (right) */
+.petition-controls {
+	display: flex;
+	gap: 0.6rem;
+	align-items: center;
+	margin: 0.5rem 0;
+	max-width: 600px;
+}
+.petition-controls .control {
+	flex: 1 1 0;
+}
+.petition-controls .control-left {
+	min-width: 0; /* allow select to shrink */
+}
+.petition-controls .control-right {
+	display: flex;
+	justify-content: flex-end;
+	align-items: center;
+}
+.petition-controls .control-label {
+	display: inline-block;
+	margin-right: 0.5rem;
+	font-weight: 600;
+}
+.petition-controls select#petition-select {
+	width: 100%;
+	max-width: 100%;
+	padding: 6px 8px;
+	font-size: 0.95rem;
+	border: 1px solid #c9c9c9;
+	border-radius: 4px;
+	background: #fff;
+}
+
+/* Segmented radio control for state filter */
+.segmented-control {
+	display: inline-flex;
+	border: 1px solid #c9c9c9;
+	border-radius: 6px;
+	overflow: hidden;
+	background: #fff;
+}
+.segmented-control label {
+	user-select: none;
+	padding: 6px 10px;
+	cursor: pointer;
+	font-size: 0.9rem;
+	line-height: 1.1;
+	color: #222;
+	background: #fff;
+	border-right: 1px solid #e1e1e1;
+}
+.segmented-control label:last-of-type {
+	border-right: none;
+}
+.segmented-control input[type="radio"]:checked + label {
+	background: #1d68cd;
+	color: #fff;
+	border-right-color: #1d68cd;
+}
+.segmented-control input[type="radio"]:focus-visible + label {
+	outline: 2px solid #1d68cd;
+	outline-offset: -2px; /* keep outline snug */
+}
+
+/* Stack controls on small screens */
+@media (max-width: 520px) {
+	.petition-controls {
+		flex-direction: column;
+		align-items: stretch;
+	}
+	.petition-controls .control-right {
+		justify-content: flex-start;
+	}
+}
+
 /* === Enhanced Layout Scaling (Accessibility & Presence) === */
 body#petition {
 	--scale-base: 1;
