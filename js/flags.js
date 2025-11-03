@@ -16,6 +16,7 @@
 	let animationEnabled = true;
 	let showConstituencyLabels = true;
 	let animationMode = "drop"; // "drop" | "stream" | "march"
+    let oneOffMarchActive = false; // suppress routine spawns during a one-off march
 	const STORAGE_KEY_ANIMATION = "flagsAnimation";
 	const STORAGE_KEY_LABELS = "flagsLabels";
 	const STORAGE_KEY_MODE = "flagsMode";
@@ -55,6 +56,42 @@
 		if (m) m.value = animationMode;
 	}
 
+	// Immediately stop and clear any active flag animations (falling or march)
+	function stopAllFlagAnimations() {
+		try {
+			// Stop march scheduler
+			MARCH_FORMATION.schedulerRunning = false;
+			// Clear queued rows
+			MARCH_FORMATION.rows.forEach((row) => {
+				row.queue.length = 0;
+				row.nextAvailable = 0;
+				row.lastWidth = 160;
+			});
+			// Remove any active wrappers
+			if (Array.isArray(MARCH_FORMATION.active)) {
+				MARCH_FORMATION.active.forEach((rec) => {
+					try {
+						rec && rec.wrapper && rec.wrapper.remove();
+					} catch (e) {}
+				});
+				MARCH_FORMATION.active.length = 0;
+			}
+			// Clean overlay DOM
+			const overlay = document.getElementById("flag-overlay");
+			if (overlay) {
+				overlay.querySelectorAll(".falling-flag").forEach((n) => {
+					try {
+						n.remove();
+					} catch (e) {}
+				});
+			}
+			// Clear any deferred spawns
+			_hiddenAccum = [];
+		} catch (e) {
+			console.warn("[Flags] stopAllFlagAnimations failed", e);
+		}
+	}
+
 	document.addEventListener("DOMContentLoaded", () => {
 		readToggles();
 		const f = document.getElementById("flag-toggle");
@@ -66,6 +103,10 @@
 				try {
 					localStorage.setItem(STORAGE_KEY_ANIMATION, animationEnabled);
 				} catch (err) {}
+				if (!animationEnabled) {
+					// Immediate hard stop of any current animations
+					stopAllFlagAnimations();
+				}
 				// Sync block UI if present
 				const block = document.getElementById("flag-toggle-block");
 				if (block) {
@@ -77,6 +118,24 @@
 					if (stateEl) stateEl.textContent = animationEnabled ? "On" : "Off";
 				}
 				updateDependentVisibility();
+				// Also (de)activate the one-off march button based on toggle state
+				const marchBtn = document.getElementById("run-constituency-march");
+				if (marchBtn) {
+					const t = window.petitionTracker;
+					const hasData =
+						t &&
+						t.petitionId &&
+						Array.isArray(t.tableData) &&
+						t.tableData.length &&
+						Array.isArray(t.tableDataIndy) &&
+						t.tableDataIndy.length;
+					marchBtn.disabled = !animationEnabled || !hasData;
+					marchBtn.title = marchBtn.disabled
+						? !animationEnabled
+							? "Enable Falling flags to run animations"
+							: "Select and load a petition first to run the march"
+						: "Run a one-off proportional march";
+				}
 			});
 		if (c)
 			c.addEventListener("change", (e) => {
@@ -149,6 +208,7 @@
 		// Maintain a cache of tested flag URLs (success/fail) to avoid repeated 404 fetches
 		window._flagAvailabilityCache = window._flagAvailabilityCache || new Map();
 		if (!animationEnabled) return;
+		if (oneOffMarchActive) return; // suppress incidental spawns while a one-off march runs
 		if (!count || count < 1) count = 1;
 		const overlay = ensureFlagOverlay();
 		const cap = 100;
@@ -301,6 +361,8 @@
 			{ queue: [], nextAvailable: 0, lastWidth: 160 },
 		],
 		active: [],
+		totalQueued: 0,
+		startedCount: 0,
 		nextRow: 0,
 		schedulerRunning: false,
 	};
@@ -364,9 +426,9 @@
 		if (MARCH_FORMATION.schedulerRunning) return;
 		MARCH_FORMATION.schedulerRunning = true;
 		const DURATION = 10000;
-		const baseYStart = 20;
-		const rowHeight = 70;
-		const GAP_EXTRA = 50;
+		const baseYStart = 28;
+		const rowHeight = 110; // increased to minimise cross-row label overlap
+		const GAP_EXTRA = 90; // extra horizontal buffer to keep labels legible
 		function tick() {
 			if (animationMode !== "march") {
 				MARCH_FORMATION.schedulerRunning = false;
@@ -391,6 +453,17 @@
 					rec.wrapper.style.animation = `marchMove ${DURATION}ms linear 0ms forwards`;
 					rec.started = true;
 					MARCH_FORMATION.active.push(rec);
+					// Progress event: one more has started moving
+					try {
+						MARCH_FORMATION.startedCount += 1;
+						const remaining = Math.max(
+							0,
+							(MARCH_FORMATION.totalQueued || 0) - (MARCH_FORMATION.startedCount || 0)
+						);
+						window.dispatchEvent(
+							new CustomEvent("petitionFlags:marchProgress", { detail: { remaining } })
+						);
+					} catch (e) {}
 					const distanceNeeded = rowObj.lastWidth + w + GAP_EXTRA;
 					const timeNeeded = distanceNeeded / pxPerMs;
 					rowObj.nextAvailable = now + timeNeeded;
@@ -399,12 +472,252 @@
 						try {
 							rec.wrapper.remove();
 						} catch (e) {}
+						// Remove from active list
+						try {
+							const idx = MARCH_FORMATION.active.indexOf(rec);
+							if (idx >= 0) MARCH_FORMATION.active.splice(idx, 1);
+						} catch (e) {}
 					}, DURATION + 500);
 				}
 			});
 			if (MARCH_FORMATION.schedulerRunning) requestAnimationFrame(tick);
 		}
 		requestAnimationFrame(tick);
+	}
+
+	// Create a single march flag with custom size and label, queued into a row
+	function queueCustomMarchFlag(rec, overlay) {
+		if (!animationEnabled) return; // honor global toggle
+		const LIFE = 12000;
+		const row = MARCH_FORMATION.nextRow;
+		MARCH_FORMATION.nextRow = (MARCH_FORMATION.nextRow + 1) % 4;
+		const wrapper = document.createElement("div");
+		wrapper.className = "falling-flag march-flag";
+		wrapper.dataset.marchRow = row.toString();
+		wrapper.dataset.createdAt = Date.now().toString();
+		wrapper.dataset.lifespan = LIFE.toString();
+		wrapper.style.position = "absolute";
+		wrapper.style.top = "0";
+		wrapper.style.left = "0";
+		wrapper.style.opacity = "0";
+		wrapper.style.animation = "none";
+		const flagEl = document.createElement("div");
+		flagEl.className = "balloon-flag";
+		if (rec.size && rec.size > 0) {
+			const s = Math.max(20, Math.min(80, Math.round(rec.size)));
+			flagEl.style.width = s + "px";
+			flagEl.style.height = s + "px";
+		}
+		if (rec.flagUrl) {
+			// Same availability cache logic would be overkill; for march we trust URLs
+			flagEl.style.backgroundImage = `url('${rec.flagUrl}')`;
+		} else {
+			flagEl.classList.add("neutral", "neutral-non-uk");
+			flagEl.textContent = "🌐";
+		}
+		const msgEl = document.createElement("div");
+		msgEl.className = "balloon-message";
+		// For constituency and non-UK items, render name + total signatures as a two-line label
+		if (rec && (rec.type === "constituency" || rec.type === "nonuk")) {
+			const nameSpan = document.createElement("span");
+			nameSpan.className = "balloon-label";
+			nameSpan.textContent = rec.label || "";
+			const subSpan = document.createElement("span");
+			subSpan.className = "balloon-subcount";
+			try {
+				subSpan.textContent = (typeof rec.value === "number"
+					? rec.value
+					: parseInt(rec.value, 10) || 0
+				).toLocaleString("en-GB");
+			} catch (e) {
+				subSpan.textContent = String(rec.value || "");
+			}
+			msgEl.appendChild(nameSpan);
+			msgEl.appendChild(subSpan);
+		} else {
+			msgEl.textContent = rec.label || "";
+		}
+		const isUK = isUKFlagUrl(rec.flagUrl || "");
+		msgEl.setAttribute("data-is-uk-flag", isUK ? "true" : "false");
+		// Mark as constituency-style to honor label toggle when UK flag is used
+		msgEl.setAttribute(
+			"data-constituency-flag",
+			isUK && (rec.label || "").trim().length ? "true" : "false"
+		);
+		if (
+			!showConstituencyLabels &&
+			msgEl.getAttribute("data-constituency-flag") === "true"
+		) {
+			msgEl.style.display = "none";
+		}
+		wrapper.appendChild(flagEl);
+		wrapper.appendChild(msgEl);
+		overlay.appendChild(wrapper);
+		MARCH_FORMATION.rows[row].queue.push({
+			wrapper,
+			row,
+			createdAt: Date.now(),
+			lifespan: LIFE,
+			started: false,
+		});
+	}
+
+	// Helper: compute a visual size (px) from values using sqrt scaling
+	function computeSizes(values, minPx, maxPx) {
+		const safeMin = Math.max(10, minPx | 0);
+		const safeMax = Math.max(safeMin + 4, maxPx | 0);
+		const filtered = values.filter((v) => v > 0);
+		if (!filtered.length)
+			return values.map(() => Math.round((safeMin + safeMax) / 2));
+		const vmin = Math.min(...filtered);
+		const vmax = Math.max(...filtered);
+		const smin = Math.sqrt(vmin);
+		const smax = Math.sqrt(vmax);
+		const denom = smax - smin || 1;
+		return values.map((v) => {
+			if (v <= 0) return safeMin;
+			const sv = Math.sqrt(v);
+			const t = (sv - smin) / denom;
+			return Math.round(safeMin + t * (safeMax - safeMin));
+		});
+	}
+
+	// Public API: build and run a one-off proportional march from PetitionTracker data
+	function runProportionalMarchFromTracker(opts = {}) {
+		try {
+			if (!animationEnabled) {
+				console.warn("[Flags] Animation disabled; march aborted.");
+				return false;
+			}
+			const tracker = window.petitionTracker;
+			if (
+				!tracker ||
+				!Array.isArray(tracker.tableData) ||
+				!Array.isArray(tracker.tableDataIndy) ||
+				!tracker.tableData.length
+			) {
+				console.warn("[Flags] Proportional march aborted: no tracker data.");
+				return false;
+			}
+			const overlay = ensureFlagOverlay();
+			// Override: stop any currently playing animations
+			stopAllFlagAnimations();
+			// Build constituency items (UK): one per constituency, using nation flag and constituency label
+			const constituencyItems = (tracker.tableDataIndy || []).map((c) => {
+				const code = (c.ons_code || "").charAt(0);
+				let regionKey = null;
+				switch (code) {
+					case "E":
+						regionKey = "england";
+						break;
+					case "S":
+						regionKey = "scotland";
+						break;
+					case "W":
+						regionKey = "wales";
+						break;
+					case "N":
+						regionKey = "northernIreland";
+						break;
+				}
+				let flagUrl = null;
+				if (regionKey && typeof tracker.getRegionFlagUrl === "function") {
+					flagUrl = tracker.getRegionFlagUrl(regionKey);
+				}
+				return {
+					label: c.name || "",
+					value: c.signature_count || 0,
+					flagUrl,
+					type: "constituency",
+				};
+			});
+			// Build non-UK country items
+			const nonUkItems = (tracker.tableData || [])
+				.filter((co) => (co.code || "") !== "GB")
+				.map((co) => {
+					const raw = (co.code || "").toLowerCase();
+					const useFlag = /^[a-z]{2}$/.test(raw) && raw !== "gb";
+					const flagUrl = useFlag
+						? `https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.3.0/flags/4x3/${raw}.svg`
+						: null;
+					return {
+						label: co.name || "Non-UK",
+						value: co.signature_count || 0,
+						flagUrl,
+						type: "nonuk",
+					};
+				});
+
+			const doCon = opts.doConstituencies !== false;
+			const doNonUk = opts.doNonUk !== false;
+			const seq = [];
+			if (doCon && constituencyItems.length) {
+				const sizes = computeSizes(
+					constituencyItems.map((i) => i.value),
+					opts.constituencyMinPx || 28,
+					opts.constituencyMaxPx || 56
+				);
+				constituencyItems.forEach((item, idx) => {
+					seq.push({ ...item, size: sizes[idx] });
+				});
+			}
+			if (doNonUk && nonUkItems.length) {
+				const sizes2 = computeSizes(
+					nonUkItems.map((i) => i.value),
+					opts.nonUkMinPx || 28,
+					opts.nonUkMaxPx || 56
+				);
+				nonUkItems.forEach((item, idx) => {
+					seq.push({ ...item, size: sizes2[idx] });
+				});
+			}
+			if (!seq.length) return false;
+			// Switch to march mode temporarily for this run
+			const prevMode = animationMode;
+			animationMode = "march";
+			const sel = document.getElementById("animation-mode");
+			if (sel) sel.value = "march"; // reflect while running, do not persist
+			const overlayEl = ensureFlagOverlay();
+			// Enqueue all flags
+			seq.sort((a, b) => b.value - a.value); // larger first for nicer cadence
+			seq.forEach((rec) => queueCustomMarchFlag(rec, overlayEl));
+			// Mark active and set counters
+			oneOffMarchActive = true;
+			MARCH_FORMATION.totalQueued = seq.length;
+			MARCH_FORMATION.startedCount = 0;
+			// Notify listeners that march run has started
+			try {
+				window.dispatchEvent(
+					new CustomEvent("petitionFlags:marchStart", { detail: { total: seq.length } })
+				);
+			} catch (e) {}
+			startMarchScheduler();
+			// Restore previous mode once queues drain
+			const restoreWhenDrained = () => {
+				const anyQueued = MARCH_FORMATION.rows.some((r) => r.queue.length > 0);
+				if (!anyQueued) {
+					// small extra delay so last ones can exit scene
+					setTimeout(() => {
+						animationMode = prevMode;
+						if (sel) sel.value = prevMode;
+						MARCH_FORMATION.schedulerRunning = false;
+						oneOffMarchActive = false;
+						try {
+							window.dispatchEvent(
+								new CustomEvent("petitionFlags:marchComplete", { detail: { total: seq.length } })
+							);
+						} catch (e) {}
+					}, 12000);
+					return;
+				}
+				setTimeout(restoreWhenDrained, 1000);
+			};
+			setTimeout(restoreWhenDrained, 1500);
+			return true;
+		} catch (e) {
+			console.warn("[Flags] Proportional march failed", e);
+			return false;
+		}
 	}
 
 	function applyToggleToExistingFlags() {
@@ -535,6 +848,7 @@
 	window._petitionFlags = {
 		spawnFlags,
 		applyToggleToExistingFlags,
+		runProportionalMarchFromTracker,
 		debug() {
 			const overlay = document.getElementById("flag-overlay");
 			if (!overlay) return { overlay: 0 };
@@ -587,6 +901,79 @@
 	});
 
 	document.addEventListener("DOMContentLoaded", () => {
+		// Wire one-off proportional march button
+		const marchBtn = document.getElementById("run-constituency-march");
+		if (marchBtn) {
+			const updateDisabled = () => {
+				const t = window.petitionTracker;
+					const ok =
+						t &&
+						t.petitionId &&
+						Array.isArray(t.tableData) &&
+						t.tableData.length &&
+						Array.isArray(t.tableDataIndy) &&
+						t.tableDataIndy.length &&
+						animationEnabled;
+					marchBtn.disabled = !ok;
+					marchBtn.title = ok
+						? "Run a one-off proportional march"
+						: (!animationEnabled
+								? "Enable Falling flags to run animations"
+								: "Select and load a petition first to run the march");
+			};
+			updateDisabled();
+			marchBtn.addEventListener("click", () => {
+				const ok = runProportionalMarchFromTracker();
+				if (!ok) {
+					console.warn("[Flags] Unable to run proportional march (no data).");
+				}
+			});
+				// Feedback while running
+				const setRunningState = (running, total) => {
+					try {
+						marchBtn.setAttribute("aria-busy", running ? "true" : "false");
+						const titleEl = marchBtn.querySelector(".block-title");
+						const descEl = marchBtn.querySelector(".block-desc");
+						if (running) {
+							marchBtn.disabled = true;
+							if (titleEl) titleEl.textContent = "Running march…";
+							if (descEl) {
+								descEl.setAttribute("aria-live", "polite");
+								descEl.textContent = total && total > 0
+									? `One‑off march in progress (${total} flags queued)…`
+									: "One‑off march in progress…";
+							}
+						} else {
+							if (titleEl) titleEl.textContent = "Constituency & Non‑UK March";
+							if (descEl) {
+								descEl.textContent =
+									"One‑off march of flags: one per UK constituency and one per country outside the UK. Flag size reflects total signatures.";
+							}
+							updateDisabled();
+						}
+					} catch (e) {}
+				};
+				window.addEventListener("petitionFlags:marchStart", (ev) => {
+					setRunningState(true, ev && ev.detail && ev.detail.total);
+				});
+				window.addEventListener("petitionFlags:marchProgress", (ev) => {
+					try {
+						const descEl = marchBtn.querySelector(".block-desc");
+						if (!descEl) return;
+						const remaining = (ev && ev.detail && typeof ev.detail.remaining === "number")
+							? ev.detail.remaining
+							: undefined;
+						if (typeof remaining === "number") {
+							descEl.textContent = `March in progress – ${remaining.toLocaleString("en-GB")} remaining…`;
+						}
+					} catch (e) {}
+				});
+				window.addEventListener("petitionFlags:marchComplete", () => {
+					setRunningState(false);
+				});
+			// Also re-check after a short delay in case tracker initializes later
+			setTimeout(updateDisabled, 2000);
+		}
 		const resetBtn = document.getElementById("reset-graph-btn");
 		if (resetBtn) {
 			resetBtn.addEventListener("click", () => {

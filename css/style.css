@@ -1267,15 +1267,36 @@ h4 {
 	box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
 	font-size: 12px;
 	color: #222;
-	/* Remove max-width and truncation so full constituency label is visible */
-	/* max-width: 210px; */
-	white-space: nowrap;
+	/* Allow up to two lines and constrain width to reduce collisions. */
+	white-space: normal;
+	max-width: 240px;
+	word-break: break-word;
 	overflow: visible;
 	text-overflow: clip;
 	border: 1px solid rgba(0, 0, 0, 0.06);
 	text-align: center; /* center label under the flag */
 	margin-top: 0px; /* remove top margin so label sits closer */
 	transform: translateY(-2px); /* slight upward nudge */
+}
+
+/* Two-line constituency label styling */
+.balloon-message .balloon-label {
+	display: block;
+	font-weight: 600; /* match bold treatment used across UI for key labels */
+	line-height: 1.1;
+}
+.balloon-message .balloon-subcount {
+	display: block;
+	font-size: 13px; /* larger for legibility */
+	font-weight: 700; /* bolder emphasis for totals */
+	color: #1d68cd; /* primary UI blue for consistency */
+	opacity: 1;
+	margin-top: 2px;
+}
+
+/* Make constituency labels in standard falling animations bold like one-off */
+.balloon-message[data-constituency-flag="true"] {
+	font-weight: 600;
 }
 
 /* Ensure long constituency names never push flag off-screen */
