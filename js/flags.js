@@ -15,7 +15,7 @@
 
 	let animationEnabled = true;
 	let showConstituencyLabels = true;
-	let animationMode = "drop"; // "drop" | "stream" | "march"
+	let animationMode = "drop"; // "drop" | "stream" | "march" | "snow"
 	let oneOffMarchActive = false; // suppress routine spawns during a one-off march
 	const STORAGE_KEY_ANIMATION = "flagsAnimation";
 	const STORAGE_KEY_LABELS = "flagsLabels";
@@ -23,6 +23,166 @@
 
 	// Track any deferred spawn timeouts so we can cancel them on toggle-off
 	let _deferredSpawnTimers = [];
+
+	// Snow mode accumulation grid (simple columnar pile up to ~25% viewport height)
+	const SNOW_PILE = {
+		inited: false,
+		cols: 0,
+		heights: [], // per-column accumulated height in px
+		caps: [], // per-column cap in px (unused when unlimited)
+		colWidth: 0,
+		lastVW: 0,
+		lastVH: 0,
+		settled: [], // track settled wrappers for shaving logic
+	};
+
+	function initSnowPile() {
+		try {
+			const vw = Math.max(
+				document.documentElement.clientWidth || 0,
+				window.innerWidth || 0
+			);
+			const vh = Math.max(
+				document.documentElement.clientHeight || 0,
+				window.innerHeight || 0
+			);
+			// Column count scales with width; aim ~50-70px per column
+			const cols = Math.max(12, Math.floor(vw / 56));
+			SNOW_PILE.cols = cols;
+			SNOW_PILE.colWidth = vw / cols;
+			SNOW_PILE.heights = new Array(cols).fill(0);
+			// Keep a caps array for compatibility, but ignore it (unlimited accumulation)
+			SNOW_PILE.caps = new Array(cols).fill(Number.POSITIVE_INFINITY);
+			SNOW_PILE.lastVW = vw;
+			SNOW_PILE.lastVH = vh;
+			SNOW_PILE.inited = true;
+		} catch (e) {
+			console.warn("[Flags] initSnowPile failed", e);
+		}
+	}
+
+	function snowResetOnResize() {
+		// For simplicity, reset the pile on significant resize to keep math sane
+		SNOW_PILE.inited = false;
+		initSnowPile();
+		// Remove any settled snow flags (they will naturally rebuild)
+		try {
+			const overlay = document.getElementById("flag-overlay");
+			if (overlay)
+				overlay
+					.querySelectorAll(".falling-flag.snow-settled")
+					.forEach((n) => n.remove());
+			SNOW_PILE.settled = [];
+		} catch (e) {}
+	}
+
+	function ensureSnowPile() {
+		if (!SNOW_PILE.inited) initSnowPile();
+	}
+
+	function getSnowColumnRange(leftPx, widthPx) {
+		ensureSnowPile();
+		const cw = SNOW_PILE.colWidth || 1;
+		const start = Math.max(0, Math.floor(leftPx / cw));
+		const end = Math.min(
+			SNOW_PILE.cols - 1,
+			Math.floor((leftPx + widthPx) / cw)
+		);
+		return { start, end };
+	}
+
+	function getSnowBaseHeight(start, end) {
+		ensureSnowPile();
+		let maxH = 0;
+		for (let i = start; i <= end; i++) {
+			maxH = Math.max(maxH, SNOW_PILE.heights[i] || 0);
+		}
+		return maxH;
+	}
+
+	function canAcceptSnow(start, end, added) {
+		// Unlimited accumulation: always accept
+		return true;
+	}
+
+	function addSnowHeight(start, end, added) {
+		ensureSnowPile();
+		for (let i = start; i <= end; i++) {
+			SNOW_PILE.heights[i] = (SNOW_PILE.heights[i] || 0) + added;
+		}
+	}
+
+	function getSnowMaxHeight() {
+		ensureSnowPile();
+		let m = 0;
+		for (let i = 0; i < SNOW_PILE.cols; i++)
+			m = Math.max(m, SNOW_PILE.heights[i] || 0);
+		return m;
+	}
+
+	// Remove the current top layer to keep pile height around 50% of viewport
+	function shaveSnowLayer() {
+		try {
+			ensureSnowPile();
+			const vh = Math.max(
+				document.documentElement.clientHeight || 0,
+				window.innerHeight || 0
+			);
+			const capHeight = Math.round(0.5 * vh);
+			let maxH = getSnowMaxHeight();
+			if (maxH <= capHeight) return false; // nothing to shave
+			const overlay = document.getElementById("flag-overlay");
+			if (!overlay) return false;
+			const topBoundary = vh - maxH; // y where pile begins (top of pile)
+			// Estimate a layer thickness (median of last 12 items or 56px)
+			let layer = 56;
+			try {
+				const recent = SNOW_PILE.settled.slice(-12);
+				if (recent.length) {
+					const arr = recent.map((r) => r.h || 56).sort((a, b) => a - b);
+					layer = arr[Math.floor(arr.length / 2)] || 56;
+				}
+			} catch (e) {}
+			const bandStart = Math.max(0, Math.round(topBoundary - layer - 6));
+			const bandEnd = Math.round(topBoundary + 8);
+			// Collect candidates in the top band
+			const candidates = [];
+			SNOW_PILE.settled.forEach((rec) => {
+				if (!rec || !rec.el || !rec.el.parentNode) return;
+				const t = parseFloat(rec.el.style.top || "0");
+				if (!isFinite(t)) return;
+				if (t >= bandStart && t <= bandEnd) candidates.push(rec);
+			});
+			if (!candidates.length) return false;
+			// Remove candidates and reduce per-column heights accordingly
+			candidates.forEach((rec) => {
+				try {
+					for (let i = rec.start; i <= rec.end; i++) {
+						SNOW_PILE.heights[i] = Math.max(
+							0,
+							(SNOW_PILE.heights[i] || 0) - (rec.h || 0)
+						);
+					}
+					// Fade out and remove element
+					rec.el.style.transition = "opacity 250ms ease";
+					rec.el.style.opacity = "0";
+					setTimeout(() => {
+						try {
+							rec.el.remove();
+						} catch (e) {}
+					}, 280);
+				} catch (e) {}
+			});
+			// Remove from settled list
+			SNOW_PILE.settled = SNOW_PILE.settled.filter(
+				(r) => !candidates.includes(r)
+			);
+			return true;
+		} catch (e) {
+			console.warn("[Flags] shaveSnowLayer failed", e);
+			return false;
+		}
+	}
 
 	function updateDependentVisibility() {
 		const flagCheckbox = document.getElementById("flag-toggle");
@@ -227,6 +387,7 @@
 		if (animationMode === "march") {
 			return spawnMarchFlags(flagUrl, spawnCount, message, overlay);
 		}
+		const isSnow = animationMode === "snow";
 		function positionFlag(wrapper) {
 			try {
 				const frac = parseFloat(wrapper.dataset.leftFraction || Math.random());
@@ -317,7 +478,7 @@
 				const duration = 3000 + Math.floor(Math.random() * 3000);
 				let delay = 0;
 				delay =
-					animationMode === "stream"
+					animationMode === "stream" || isSnow
 						? Math.floor(Math.random() * 10000)
 						: Math.floor(Math.random() * 800);
 				wrapper.style.animationDuration = duration + "ms";
@@ -328,6 +489,63 @@
 				wrapper.style.setProperty("visibility", "hidden", "important");
 				msgEl.style.setProperty("visibility", "hidden", "important");
 				overlay.appendChild(wrapper);
+				if (isSnow) {
+					// Snow mode: custom GPU-friendly fall from above to a ground target without overshooting below viewport
+					try {
+						// Disable the default keyframe fall; we'll animate with top for a clear, full-height drop
+						wrapper.style.animation = "none";
+						// Respect constituency label toggle but ensure visibility is not hidden
+						const isConstituency = msgEl.getAttribute("data-constituency-flag") === "true";
+						if (isConstituency && !showConstituencyLabels) {
+							msgEl.style.display = "none";
+						} else {
+							msgEl.style.removeProperty("display");
+							msgEl.style.setProperty("display", "block", "important");
+						}
+						msgEl.style.removeProperty("visibility");
+						// Ensure we position horizontally first using the same logic as other modes
+						positionFlag(wrapper);
+						const startFall = () => {
+							const vh = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0);
+							const elH = wrapper.offsetHeight || 60;
+							// Small random bottom margin to create a row-like illusion
+							const gap = 4 + Math.floor(Math.random() * 10); // 4..13px
+							const targetTop = Math.max(0, vh - elH - gap);
+							// Compute a start position well above the viewport for a clear top-origin fall
+							const startTop = -elH - Math.max(60, Math.round(0.1 * vh));
+							const fallMs = 3000 + Math.floor(Math.random() * 3000);
+							// Remove visibility clamp; make element visible but faded
+							wrapper.style.removeProperty("visibility");
+							wrapper.style.opacity = "0";
+							// Set initial positions before enabling the transition
+							wrapper.style.top = `${startTop}px`;
+							const tilt = (Math.random() - 0.5) * 16;
+							// Override default CSS translateY to avoid local offset; keep only a static tilt
+							wrapper.style.transform = `rotate(${tilt.toFixed(1)}deg)`;
+							// Force a reflow so the browser registers the starting point
+							void wrapper.offsetHeight;
+							// Animate the top property down to the ground and fade in quickly
+							wrapper.style.transition = `top ${fallMs}ms linear, opacity 260ms ease-in`;
+							requestAnimationFrame(() => {
+								wrapper.style.top = `${Math.round(targetTop)}px`;
+								wrapper.style.opacity = "1";
+							});
+							const onDone = (ev) => {
+								try {
+									if (ev && ev.propertyName && ev.propertyName !== "top") return;
+									// Mark as settled for lighter styling and drop transition
+									wrapper.classList.add("snow-settled");
+									wrapper.style.transition = "";
+								} catch (e) {}
+								wrapper.removeEventListener("transitionend", onDone);
+							};
+							wrapper.addEventListener("transitionend", onDone, { once: true });
+						};
+						if (delay && delay > 0) setTimeout(startFall, delay);
+						else startFall();
+					} catch (e) {}
+					return; // Skip keyframe listeners for snow; we're using transform-based fall
+				}
 				requestAnimationFrame(() => positionFlag(wrapper));
 				const onStart = function () {
 					try {
@@ -357,8 +575,39 @@
 				wrapper.addEventListener("animationstart", onStart, { once: true });
 				wrapper.addEventListener("animationend", function () {
 					try {
-						overlay.removeChild(wrapper);
-					} catch (e) {}
+						if (!isSnow) {
+							overlay.removeChild(wrapper);
+							return;
+						}
+						// Snow mode: let keyframe fall finish, then freeze just above bottom with slight random gap
+						// Remove the fall animation and make the flag fully visible
+						wrapper.style.animation = "none";
+						wrapper.style.opacity = "1";
+						const vw = Math.max(
+							document.documentElement.clientWidth || 0,
+							window.innerWidth || 0
+						);
+						const vh = Math.max(
+							document.documentElement.clientHeight || 0,
+							window.innerHeight || 0
+						);
+						const elW = wrapper.offsetWidth || 120;
+						const elH = wrapper.offsetHeight || 60;
+						// Preserve the x-position where it fell; do not re-randomize
+						// Small random bottom margin to create row-like illusion
+						const gap = 4 + Math.floor(Math.random() * 10); // 4..13px
+						const topPx = Math.max(0, vh - elH - gap);
+						wrapper.style.top = Math.round(topPx) + "px";
+						// Reset transform to ground position with a bit of tilt
+						const tilt = (Math.random() - 0.5) * 16;
+						wrapper.style.transform = `translateY(0px) rotate(${tilt.toFixed(1)}deg)`;
+						// Mark as settled for lighter styling
+						wrapper.classList.add("snow-settled");
+					} catch (e) {
+						try {
+							overlay.removeChild(wrapper);
+						} catch (_) {}
+					}
 				});
 			})();
 		}
@@ -900,6 +1149,19 @@
 		ensureFlagOverlay();
 		readToggles();
 		installWrapper();
+		// Prepare snow accumulation grid and reset it on resize
+		try {
+			initSnowPile();
+			let rt;
+			window.addEventListener(
+				"resize",
+				() => {
+					clearTimeout(rt);
+					rt = setTimeout(snowResetOnResize, 120);
+				},
+				{ passive: true }
+			);
+		} catch (e) {}
 		// Initialize block states to reflect current preferences
 		try {
 			const flagBlock = document.getElementById("flag-toggle-block");
